@@ -37,3 +37,26 @@ jobs:
       - name: Build web admin
         working-directory: web-admin
         run: npm run build
+
+  database-migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply foundation migration
+        env:
+          PGPASSWORD: ci-only-password
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f database/migrations/0001_foundation.sql
