@@ -124,6 +124,136 @@ paths:
                 $ref: '#/components/schemas/UserResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /customers:
+    get:
+      tags: [Customers]
+      operationId: listCustomers
+      summary: List active customers in the authenticated organization
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Customer records
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/CustomerResponse' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing customers.view permission }
+    post:
+      tags: [Customers]
+      operationId: createCustomer
+      summary: Create a customer
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerRequest' }
+      responses:
+        '201':
+          description: Customer created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Missing customers.manage permission }
+  /customers/{id}:
+    get:
+      tags: [Customers]
+      operationId: getCustomer
+      summary: Get a customer within the authenticated organization
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Customer record
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerResponse' }
+        '404': { description: Customer not found }
+    patch:
+      tags: [Customers]
+      operationId: updateCustomer
+      summary: Update customer details
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerRequest' }
+      responses:
+        '200': { description: Customer updated }
+        '404': { description: Customer not found }
+    delete:
+      tags: [Customers]
+      operationId: archiveCustomer
+      summary: Soft archive a customer
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Customer archived }
+        '404': { description: Customer not found }
+  /enquiries:
+    get:
+      tags: [Customers]
+      operationId: listEnquiries
+      summary: List enquiries in the authenticated organization
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Enquiry records
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EnquiryResponse' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Customers]
+      operationId: createEnquiry
+      summary: Create an enquiry for an active customer
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnquiryRequest' }
+      responses:
+        '201':
+          description: Enquiry created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, enquiryNumber, createdAt]
+                properties:
+                  id: { type: string, format: uuid }
+                  enquiryNumber: { type: string }
+                  createdAt: { type: string, format: date-time }
+        '404': { description: Active customer not found }
+  /enquiries/{id}/status:
+    patch:
+      tags: [Customers]
+      operationId: updateEnquiryStatus
+      summary: Update enquiry pipeline status
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [NEW, CONTACTED, SITE_VISIT, QUOTATION_PENDING, QUOTED, WON, LOST, ON_HOLD]
+      responses:
+        '200': { description: Enquiry status updated }
+        '404': { description: Enquiry not found }
 components:
   securitySchemes:
     bearerAuth:
@@ -211,6 +341,59 @@ components:
           type: array
           uniqueItems: true
           items: { type: string }
+    CustomerRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 180 }
+        customerType: { type: string, enum: [INDIVIDUAL, BUSINESS], default: INDIVIDUAL }
+        phone: { type: string, nullable: true, maxLength: 30 }
+        alternatePhone: { type: string, nullable: true, maxLength: 30 }
+        email: { type: string, nullable: true, maxLength: 254 }
+        gstin: { type: string, nullable: true, maxLength: 15 }
+        notes: { type: string, nullable: true }
+    CustomerResponse:
+      type: object
+      required: [id, displayName, customerType, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+        customerType: { type: string }
+        phone: { type: string, nullable: true }
+        alternatePhone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        gstin: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EnquiryRequest:
+      type: object
+      required: [customerId, title]
+      properties:
+        customerId: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 180 }
+        description: { type: string, nullable: true }
+        source: { type: string, enum: [WALK_IN, PHONE, WHATSAPP, WEBSITE, REFERRAL, OTHER] }
+        priority: { type: string, enum: [LOW, NORMAL, HIGH, URGENT] }
+        expectedValue: { type: number, minimum: 0, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+    EnquiryResponse:
+      type: object
+      required: [id, enquiryNumber, customerId, customerName, title, source, status, priority, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        enquiryNumber: { type: string }
+        customerId: { type: string, format: uuid }
+        customerName: { type: string }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        source: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        expectedValue: { type: number, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     ApiError:
       type: object
       required: [error]
