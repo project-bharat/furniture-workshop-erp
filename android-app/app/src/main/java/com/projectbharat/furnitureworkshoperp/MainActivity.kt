@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -33,12 +34,6 @@ private val Ivory = Color(0xFFF7F4F1)
 private val Line = Color(0xFFEAE4E0)
 private val money = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
 
-private data class WorkRecord(
-    val id: Int, val title: String, val detail: String, val status: String,
-    val amount: Double = 0.0, val kind: String, val phone: String = "",
-    val role: String = "", val attendance: String = "", val task: String = ""
-)
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,13 +45,13 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = lightColorScheme(
                 primary = Coral, onPrimary = Color.White, secondary = Slate,
                 background = Ivory, surface = Color.White, onSurface = Slate
-            )) { WorkshopApp() }
+            )) { WorkshopApp(WorkshopDatabase.getInstance(this)) }
         }
     }
 }
 
 @Composable
-private fun WorkshopApp() {
+private fun WorkshopApp(database: WorkshopDatabase) {
     var page by remember { mutableStateOf("Overview") }
     var query by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
@@ -64,22 +59,17 @@ private fun WorkshopApp() {
     var editing by remember { mutableStateOf<WorkRecord?>(null) }
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<WorkRecord?>(null) }
-    var nextId by remember { mutableIntStateOf(100) }
-    val records = remember { mutableStateListOf(
-        WorkRecord(1,"Sharma Residence","Modular kitchen and wardrobes · Amit Sharma","Site visit",485000.0,"Enquiry",phone="9876543210"),
-        WorkRecord(2,"Mehta Living Room","TV unit and wall panels · Neha Mehta","Quotation sent",185000.0,"Enquiry",phone="9876501234"),
-        WorkRecord(3,"Kulkarni Villa","Full home interiors · Rohan Kulkarni","In production",1250000.0,"Project"),
-        WorkRecord(4,"Patil Bedroom Set","Bed, side tables and wardrobe · Sonal Patil","Design approved",275000.0,"Project"),
-        WorkRecord(5,"Kitchen carcass · Cutting","Kulkarni Villa · Assigned to Ramesh","In progress",0.0,"Production",role="Carpentry"),
-        WorkRecord(6,"Wardrobe panels · Polishing","Patil Bedroom Set · Assigned to Suresh","Pending",0.0,"Production",role="Finishing"),
-        WorkRecord(7,"BWP Plywood 18mm","Greenply · Godown A · 12 sheets","In stock",0.0,"Inventory",role="Sheets"),
-        WorkRecord(8,"Hettich soft-close hinges","Hardware · Godown A · 8 units · reorder at 20","Low stock",0.0,"Inventory",role="Hardware"),
-        WorkRecord(9,"Ramesh Pawar","Carpenter · 9876543211","Present",0.0,"Workforce",phone="9876543211",role="Carpenter",attendance="Present",task="Kitchen carcass cutting"),
-        WorkRecord(10,"Suresh Jadhav","Polisher · 9876543212","Present",0.0,"Workforce",phone="9876543212",role="Finisher",attendance="Present",task="Wardrobe panel polishing"),
-        WorkRecord(11,"Imran Shaikh","Installer · 9876543213","Absent",0.0,"Workforce",phone="9876543213",role="Installer",attendance="Absent",task="Site measurement"),
-        WorkRecord(12,"Purchase · Edge band rolls","City Hardware · 18,500","Awaiting approval",18500.0,"Approval"),
-        WorkRecord(13,"Quotation · Kulkarni Villa","Final estimate","Awaiting approval",1250000.0,"Approval")
-    ) }
+    val dao = remember(database) { database.workRecordDao() }
+    val records by dao.observeAll().collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(dao) {
+        if (dao.count() == 0) dao.insertAll(initialWorkshopRecords())
+    }
+    fun persist(record: WorkRecord) {
+        scope.launch {
+            if (record.id == 0) dao.insert(record) else dao.update(record)
+        }
+    }
 
     val currentRecords = records.filter { it.kind == pageKind(page) &&
         (query.isBlank() || listOf(it.title,it.detail,it.status,it.role,it.phone,it.task).any { s -> s.contains(query,true) }) }
@@ -146,8 +136,8 @@ private fun WorkshopApp() {
                 else -> ModulePage(
                     page = page, data = currentRecords, allData = records,
                     onOpen = { selected = it },
-                    onStatus = { record, status -> replaceRecord(records, record.copy(status = status, attendance = if (record.kind == "Workforce") status else record.attendance)) },
-                    onAttendance = { record -> val next = if (record.attendance == "Present") "Absent" else "Present"; replaceRecord(records, record.copy(attendance = next, status = next)) }
+                    onStatus = { record, status -> persist(record.copy(status = status, attendance = if (record.kind == "Workforce") status else record.attendance)) },
+                    onAttendance = { record -> val next = if (record.attendance == "Present") "Absent" else "Present"; persist(record.copy(attendance = next, status = next)) }
                 )
             }
         }
@@ -157,8 +147,7 @@ private fun WorkshopApp() {
         initial = editing, defaultKind = pageKind(page),
         onDismiss = { adding = false; editing = null },
         onSave = { value ->
-            if (editing == null) records.add(0, value.copy(id = nextId++))
-            else replaceRecord(records, value)
+            persist(if (editing == null) value.copy(id = 0) else value)
             adding = false; editing = null
         }
     )
@@ -166,14 +155,14 @@ private fun WorkshopApp() {
         RecordDetails(record, onDismiss = { selected = null },
             onEdit = { editing = record; selected = null },
             onDelete = { deleting = record; selected = null },
-            onStatus = { status -> replaceRecord(records, record.copy(status = status, attendance = if (record.kind == "Workforce") status else record.attendance)); selected = record.copy(status = status) },
-            onAttendance = { val next = if (record.attendance == "Present") "Absent" else "Present"; replaceRecord(records, record.copy(attendance = next, status = next)); selected = record.copy(attendance = next, status = next) }
+            onStatus = { status -> persist(record.copy(status = status, attendance = if (record.kind == "Workforce") status else record.attendance)); selected = record.copy(status = status) },
+            onAttendance = { val next = if (record.attendance == "Present") "Absent" else "Present"; persist(record.copy(attendance = next, status = next)); selected = record.copy(attendance = next, status = next) }
         )
     }
     deleting?.let { record ->
         AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete record?") },
             text = { Text("“${record.title}” will be removed from this demo workspace.") },
-            confirmButton = { TextButton(onClick = { records.removeAll { it.id == record.id }; deleting = null }) { Text("Delete", color = Coral) } },
+            confirmButton = { TextButton(onClick = { scope.launch { dao.deleteById(record.id) }; deleting = null }) { Text("Delete", color = Coral) } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } })
     }
 }
@@ -183,11 +172,6 @@ private fun pageKind(page: String) = when(page) {
     "Inventory" -> "Inventory"; "Workforce" -> "Workforce"; "Approvals" -> "Approval"
     else -> ""
 }
-private fun replaceRecord(records: MutableList<WorkRecord>, record: WorkRecord) {
-    val index = records.indexOfFirst { it.id == record.id }
-    if (index >= 0) records[index] = record
-}
-
 @Composable
 private fun BrandLogo(modifier: Modifier = Modifier) {
     val logo = remember { drawable("logo_horizontal") }
