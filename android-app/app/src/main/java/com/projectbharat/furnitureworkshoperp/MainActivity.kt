@@ -87,7 +87,11 @@ private fun WorkshopApp() {
     Scaffold(
         containerColor = Ivory,
         topBar = {
-            Column(Modifier.background(Color.White)) {
+            Column(
+                Modifier
+                    .background(Color.White)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+            ) {
                 Row(
                     Modifier.fillMaxWidth().height(54.dp).padding(horizontal=14.dp),
                     verticalAlignment = Alignment.CenterVertically
