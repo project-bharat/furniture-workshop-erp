@@ -216,9 +216,7 @@ private fun Overview(data: List<WorkRecord>, onOpen: (String) -> Unit, onAdd: ()
     val projectValue = data.filter { it.kind == "Project" }.sumOf { it.amount }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("Good afternoon", fontSize = 11.sp, color = Slate.copy(.58f))
-            Text("Workshop overview", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Slate)
-            Text("4 November · Demo workspace", fontSize = 10.sp, color = Slate.copy(.55f))
+            Text("Overview", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Slate)
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Slate), shape = RoundedCornerShape(16.dp)) {
