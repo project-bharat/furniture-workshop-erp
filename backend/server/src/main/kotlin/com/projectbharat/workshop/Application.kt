@@ -1,5 +1,8 @@
 package com.projectbharat.workshop
 
+import com.projectbharat.workshop.auth.AuthService
+import com.projectbharat.workshop.auth.authRoutes
+import com.projectbharat.workshop.db.Database
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -35,6 +38,7 @@ fun Application.module() {
                     )
                 )
             }
+            authRoutes(AuthService())
         }
     }
 }
