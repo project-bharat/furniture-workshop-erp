@@ -57,6 +57,7 @@ CREATE TABLE organization_memberships (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (organization_id, user_id),
+    UNIQUE (id, organization_id),
     FOREIGN KEY (organization_id, default_branch_id)
         REFERENCES branches(organization_id, id)
 );
@@ -93,9 +94,14 @@ CREATE TABLE membership_roles (
 );
 
 CREATE TABLE membership_branches (
-    membership_id UUID NOT NULL REFERENCES organization_memberships(id) ON DELETE CASCADE,
-    branch_id UUID NOT NULL REFERENCES branches(id),
-    PRIMARY KEY (membership_id, branch_id)
+    membership_id UUID NOT NULL,
+    organization_id UUID NOT NULL,
+    branch_id UUID NOT NULL,
+    PRIMARY KEY (membership_id, branch_id),
+    FOREIGN KEY (membership_id, organization_id)
+        REFERENCES organization_memberships(id, organization_id) ON DELETE CASCADE,
+    FOREIGN KEY (organization_id, branch_id)
+        REFERENCES branches(organization_id, id)
 );
 
 CREATE TABLE refresh_sessions (
