@@ -21,8 +21,10 @@ dependencies {
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-status-pages-jvm:$ktorVersion")
     implementation("ch.qos.logback:logback-classic:1.5.12")
-    testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit5"))
     testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 kotlin {
