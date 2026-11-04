@@ -137,7 +137,7 @@ private fun WorkshopApp() {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (page) {
-                "Overview" -> Overview(records, onOpen = { page = it }, onAdd = { page = "Enquiries"; adding = true })
+                "Overview" -> Overview(records, onOpen = { page = it }, onAdd = { page = "Enquiries"; adding = true }, onSelect = { selected = it })
                 "More" -> MoreModules { page = it }
                 else -> ModulePage(
                     page = page, data = currentRecords, allData = records,
@@ -205,7 +205,7 @@ private fun drawable(name: String): Int = try {
 } catch (_: Exception) { 0 }
 
 @Composable
-private fun Overview(data: List<WorkRecord>, onOpen: (String) -> Unit, onAdd: () -> Unit) {
+private fun Overview(data: List<WorkRecord>, onOpen: (String) -> Unit, onAdd: () -> Unit, onSelect: (WorkRecord) -> Unit) {
     val metrics = listOf(
         "Enquiries" to data.count { it.kind == "Enquiry" },
         "Projects" to data.count { it.kind == "Project" },
@@ -250,9 +250,9 @@ private fun Overview(data: List<WorkRecord>, onOpen: (String) -> Unit, onAdd: ()
             }
         }
         item { Row(verticalAlignment = Alignment.CenterVertically) { Text("Workforce today", Modifier.weight(1f), fontWeight = FontWeight.Bold, color = Slate); Text("$workforcePresent present", color = Coral, fontSize = 10.sp) } }
-        items(data.filter { it.kind == "Workforce" }.take(3), key = { it.id }) { RecordTile(it) { } }
+        items(data.filter { it.kind == "Workforce" }.take(3), key = { it.id }) { RecordTile(it) { onSelect(it) } }
         item { Text("Recent records", fontWeight = FontWeight.Bold, color = Slate) }
-        items(data.filter { it.kind != "Workforce" }.take(4), key = { it.id }) { RecordTile(it) { onOpen(it.kind.let { k -> when(k) { "Enquiry" -> "Enquiries"; "Approval" -> "Approvals"; else -> k } }) } }
+        items(data.filter { it.kind != "Workforce" }.take(4), key = { it.id }) { RecordTile(it) { onSelect(it) } }
     }
 }
 
@@ -320,7 +320,7 @@ private fun ModulePage(
 
 @Composable
 private fun SmallMetric(label: String, value: Int) {
-    Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(Modifier.width(96.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(10.dp)) { Text(value.toString(), fontWeight = FontWeight.Bold, color = Slate, fontSize = 18.sp); Text(label, color = Slate.copy(.6f), fontSize = 9.sp) }
     }
 }
@@ -340,7 +340,7 @@ private fun RecordTile(record: WorkRecord, onClick: () -> Unit) {
                 Icon(when(record.kind) {
                     "Project" -> Icons.Default.HomeWork; "Production" -> Icons.Default.Handyman
                     "Inventory" -> Icons.Default.Warehouse; "Workforce" -> Icons.Default.Person
-                    "Approval" -> Icons.Default.FactCheck; else -> Icons.Default.PersonSearch
+                    "Approval" -> Icons.Default.FactCheck; else -> Icons.Default.Person
                 }, null, tint = Coral, modifier = Modifier.padding(9.dp).size(19.dp))
             }
             Spacer(Modifier.width(10.dp))
