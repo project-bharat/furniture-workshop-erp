@@ -78,6 +78,8 @@ CREATE TABLE permissions (
     description TEXT NOT NULL
 );
 
+CREATE UNIQUE INDEX uq_roles_global_key ON roles(role_key) WHERE organization_id IS NULL;
+
 CREATE TABLE role_permissions (
     role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission_key VARCHAR(120) NOT NULL REFERENCES permissions(permission_key),
@@ -178,6 +180,59 @@ INSERT INTO permissions(permission_key, module_key, description) VALUES
 ('approvals.decide','approvals','Approve or reject controlled business actions'),
 ('reports.view','reports','View permitted operational and financial reports'),
 ('audit.view','audit','View organization audit history')
+ON CONFLICT DO NOTHING;
+
+
+-- Built-in organization role templates. Each organization membership may be assigned
+-- these system roles; custom organization-specific roles can be added in a later migration.
+INSERT INTO roles (organization_id, role_key, display_name, description, is_system_role) VALUES
+(NULL, 'OWNER_ADMIN', 'Owner / Admin', 'Full business administration and approval authority', TRUE),
+(NULL, 'WORKSHOP_MANAGER', 'Workshop Manager', 'Manage projects, production stages and workshop tasks', TRUE),
+(NULL, 'CARPENTER_WORKER', 'Carpenter / Worker', 'View assigned work and update assigned tasks', TRUE),
+(NULL, 'OFFICE_SALES', 'Office / Sales Staff', 'Manage customer enquiries and project coordination', TRUE),
+(NULL, 'DELIVERY_INSTALLATION', 'Delivery / Installation Team', 'View assigned deliveries and installation work', TRUE),
+(NULL, 'PURCHASE_INVENTORY', 'Purchase / Inventory Manager', 'Manage materials, stock and purchasing workflows', TRUE)
+ON CONFLICT (role_key) WHERE organization_id IS NULL DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_key)
+SELECT r.id, p.permission_key
+FROM roles r CROSS JOIN permissions p
+WHERE r.organization_id IS NULL AND r.role_key = 'OWNER_ADMIN'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_key)
+SELECT r.id, x.permission_key
+FROM (VALUES
+    ('WORKSHOP_MANAGER','dashboard.view'),
+    ('WORKSHOP_MANAGER','customers.view'),
+    ('WORKSHOP_MANAGER','projects.view'),
+    ('WORKSHOP_MANAGER','projects.manage'),
+    ('WORKSHOP_MANAGER','production.view'),
+    ('WORKSHOP_MANAGER','production.manage'),
+    ('WORKSHOP_MANAGER','tasks.update_assigned'),
+    ('WORKSHOP_MANAGER','inventory.view'),
+    ('WORKSHOP_MANAGER','approvals.decide'),
+    ('WORKSHOP_MANAGER','reports.view'),
+    ('CARPENTER_WORKER','dashboard.view'),
+    ('CARPENTER_WORKER','projects.view'),
+    ('CARPENTER_WORKER','production.view'),
+    ('CARPENTER_WORKER','tasks.update_assigned'),
+    ('OFFICE_SALES','dashboard.view'),
+    ('OFFICE_SALES','customers.view'),
+    ('OFFICE_SALES','customers.manage'),
+    ('OFFICE_SALES','projects.view'),
+    ('OFFICE_SALES','projects.manage'),
+    ('DELIVERY_INSTALLATION','dashboard.view'),
+    ('DELIVERY_INSTALLATION','projects.view'),
+    ('DELIVERY_INSTALLATION','production.view'),
+    ('DELIVERY_INSTALLATION','tasks.update_assigned'),
+    ('PURCHASE_INVENTORY','dashboard.view'),
+    ('PURCHASE_INVENTORY','projects.view'),
+    ('PURCHASE_INVENTORY','inventory.view'),
+    ('PURCHASE_INVENTORY','inventory.manage'),
+    ('PURCHASE_INVENTORY','purchasing.manage')
+) AS x(role_key, permission_key)
+JOIN roles r ON r.role_key = x.role_key AND r.organization_id IS NULL
 ON CONFLICT DO NOTHING;
 
 COMMIT;
