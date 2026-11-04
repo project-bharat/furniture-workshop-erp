@@ -52,11 +52,13 @@ data class AuthUser(
 data class AuthFailure(val status: Int, override val message: String) : RuntimeException(message)
 
 class AuthService(
-    private val dataSource: DataSource = Database.dataSource(),
-    private val jwt: AccessTokenService = AccessTokenService(JwtSettings.fromEnvironment()),
+    private val configuredDataSource: DataSource? = null,
     private val bootstrapSecret: String = System.getenv("BOOTSTRAP_SECRET") ?: ""
 ) {
     private val random = SecureRandom()
+    private val jwtSettings by lazy { JwtSettings.fromEnvironment() }
+    private val jwt by lazy { AccessTokenService(jwtSettings) }
+    private fun database(): DataSource = configuredDataSource ?: Database.dataSource()
     private val refreshLifetimeSeconds = 60L * 60L * 24L * 30L
 
     fun bootstrap(input: BootstrapInput): TokenPair {
@@ -198,7 +200,7 @@ class AuthService(
 
     fun logout(rawToken: String?) {
         if (rawToken.isNullOrBlank()) return
-        dataSource.connection.use { connection ->
+        database().connection.use { connection ->
             connection.prepareStatement(
                 "UPDATE refresh_sessions SET revoked_at=COALESCE(revoked_at, now()) WHERE token_hash=?"
             ).use { it.setString(1, sha256(rawToken)); it.executeUpdate() }
@@ -236,7 +238,7 @@ class AuthService(
             it.executeUpdate()
         }
         val access = jwt.issue(AccessTokenClaims(user.id, user.organizationId, user.membershipId, user.permissions))
-        return TokenPair(access, refresh, expiresIn = JwtSettings.fromEnvironment().expiresInSeconds,
+        return TokenPair(access, refresh, expiresIn = jwtSettings.expiresInSeconds,
             refreshExpiresIn = refreshLifetimeSeconds, user = user)
     }
 
@@ -282,6 +284,10 @@ class AuthService(
                 val result = block(connection)
                 connection.commit()
                 result
+            } catch (failure: AuthFailure) {
+                // Persist refresh-token replay revocation before returning the authentication error.
+                connection.commit()
+                throw failure
             } catch (error: Throwable) {
                 connection.rollback()
                 throw error
