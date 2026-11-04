@@ -34,7 +34,7 @@ class SecurityPrimitivesTest {
                 membershipId = "membership-789",
                 permissions = listOf("projects.view", "customers.view")
             ),
-            Instant.parse("2026-11-04T10:00:00Z")
+            Instant.now().minusSeconds(30)
         )
 
         val decoded = service.verify(token)
