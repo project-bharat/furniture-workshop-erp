@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Furniture Workshop ERP API
-  version: 1.0.0
+  version: 0.2.0
   description: Versioned REST API shared by the Android and web clients.
 servers:
   - url: /api/v1
@@ -23,11 +23,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+  /auth/bootstrap:
+    post:
+      tags: [Authentication]
+      operationId: bootstrapOwner
+      summary: Create the first organization, branch and owner account
+      description: One-time endpoint protected by the server-side BOOTSTRAP_SECRET. It is disabled when the secret is unset or an organization already exists.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootstrapRequest'
+      responses:
+        '201':
+          description: Owner and organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Bootstrap secret rejected or bootstrap disabled
+        '409':
+          description: Owner setup already completed
   /auth/login:
     post:
       tags: [Authentication]
       operationId: login
-      summary: Authenticate a user and create a refresh session
+      summary: Authenticate by email and create a refresh session
       security: []
       requestBody:
         required: true
@@ -41,13 +67,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                $ref: '#/components/schemas/TokenResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '429':
-          $ref: '#/components/responses/RateLimited'
   /auth/refresh:
     post:
       tags: [Authentication]
@@ -66,32 +90,29 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                $ref: '#/components/schemas/TokenResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /auth/logout:
     post:
       tags: [Authentication]
       operationId: logout
-      summary: Revoke the current refresh session
-      security:
-        - bearerAuth: []
+      summary: Revoke a refresh session
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RefreshRequest'
+              $ref: '#/components/schemas/LogoutRequest'
       responses:
-        '204':
+        '200':
           description: Session revoked
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-  /me:
+  /auth/me:
     get:
       tags: [Identity]
       operationId: getCurrentUser
-      summary: Return the current user, organization membership and effective permissions
+      summary: Return the authenticated user and current server-side permissions
       security:
         - bearerAuth: []
       responses:
@@ -100,7 +121,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CurrentUserResponse'
+                $ref: '#/components/schemas/UserResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
 components:
@@ -122,83 +143,76 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiError'
-    RateLimited:
-      description: Too many requests
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ApiError'
   schemas:
     HealthResponse:
       type: object
       required: [status, service, timestamp]
       properties:
         status: { type: string, const: ok }
-        service: { type: string, example: furniture-workshop-erp-api }
+        service: { type: string }
         timestamp: { type: string, format: date-time }
+    BootstrapRequest:
+      type: object
+      additionalProperties: false
+      required: [bootstrapSecret, organizationName, legalName, ownerName, email, password]
+      properties:
+        bootstrapSecret: { type: string, writeOnly: true }
+        organizationName: { type: string, minLength: 1, maxLength: 160 }
+        legalName: { type: string, minLength: 1, maxLength: 200 }
+        branchName: { type: string, default: Main Workshop }
+        ownerName: { type: string, minLength: 1, maxLength: 160 }
+        email: { type: string, format: email, maxLength: 254 }
+        phone: { type: string, nullable: true, maxLength: 30 }
+        password: { type: string, minLength: 12, maxLength: 72, writeOnly: true }
+        deviceLabel: { type: string, nullable: true, maxLength: 120 }
     LoginRequest:
       type: object
       additionalProperties: false
-      required: [login, password, organizationId, device]
+      required: [email, password]
       properties:
-        login: { type: string, minLength: 3, maxLength: 254, description: Email or phone number }
-        password: { type: string, minLength: 1, maxLength: 256, writeOnly: true }
-        organizationId: { type: string, format: uuid }
-        device:
-          type: object
-          required: [platform, name]
-          properties:
-            platform: { type: string, enum: [ANDROID, WEB] }
-            name: { type: string, maxLength: 120 }
-            appVersion: { type: string, maxLength: 40 }
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 72, writeOnly: true }
+        deviceLabel: { type: string, nullable: true, maxLength: 120 }
     RefreshRequest:
       type: object
       additionalProperties: false
       required: [refreshToken]
       properties:
-        refreshToken: { type: string, minLength: 32, writeOnly: true }
-    AuthResponse:
+        refreshToken: { type: string, minLength: 40, writeOnly: true }
+        deviceLabel: { type: string, nullable: true, maxLength: 120 }
+    LogoutRequest:
       type: object
-      required: [accessToken, refreshToken, tokenType, expiresInSeconds]
+      properties:
+        refreshToken: { type: string, nullable: true, writeOnly: true }
+    TokenResponse:
+      type: object
+      required: [accessToken, refreshToken, tokenType, expiresIn, refreshExpiresIn, user]
       properties:
         accessToken: { type: string }
-        refreshToken: { type: string }
+        refreshToken: { type: string, writeOnly: true }
         tokenType: { type: string, const: Bearer }
-        expiresInSeconds: { type: integer, minimum: 1 }
-    CurrentUserResponse:
-      type: object
-      required: [user, organization, permissions]
-      properties:
+        expiresIn: { type: integer, minimum: 60, maximum: 3600 }
+        refreshExpiresIn: { type: integer }
         user:
-          type: object
-          required: [id, fullName]
-          properties:
-            id: { type: string, format: uuid }
-            fullName: { type: string }
-            email: { type: string, format: email, nullable: true }
-            phone: { type: string, nullable: true }
-        organization:
-          type: object
-          required: [id, displayName, defaultCurrency, timezone]
-          properties:
-            id: { type: string, format: uuid }
-            displayName: { type: string }
-            defaultCurrency: { type: string, minLength: 3, maxLength: 3 }
-            timezone: { type: string }
-            branchId: { type: string, format: uuid, nullable: true }
+          $ref: '#/components/schemas/UserResponse'
+    UserResponse:
+      type: object
+      required: [id, name, organizationId, organizationName, membershipId, role, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email, nullable: true }
+        phone: { type: string, nullable: true }
+        organizationId: { type: string, format: uuid }
+        organizationName: { type: string }
+        membershipId: { type: string, format: uuid }
+        role: { type: string }
         permissions:
           type: array
           uniqueItems: true
           items: { type: string }
     ApiError:
       type: object
-      required: [code, message, requestId]
+      required: [error]
       properties:
-        code: { type: string }
-        message: { type: string }
-        requestId: { type: string }
-        fieldErrors:
-          type: object
-          additionalProperties:
-            type: array
-            items: { type: string }
+        error: { type: string }
