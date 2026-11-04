@@ -217,9 +217,15 @@ class AuthService(
         val organizationId = runCatching { UUID.fromString(decoded.getClaim("organization_id").asString()) }.getOrElse {
             throw AuthFailure(401, "Access token is invalid")
         }
+        val membershipId = runCatching { UUID.fromString(decoded.getClaim("membership_id").asString()) }.getOrElse {
+            throw AuthFailure(401, "Access token is invalid")
+        }
         return database().connection.use { connection ->
             val row = connection.loadAuthRow(userId, organizationId)
                 ?: throw AuthFailure(401, "Account access is no longer active")
+            if (row.user.membershipId != membershipId.toString()) {
+                throw AuthFailure(401, "Access token membership is no longer active")
+            }
             row.user.copy(permissions = permissions(connection, row.roleId))
         }
     }
