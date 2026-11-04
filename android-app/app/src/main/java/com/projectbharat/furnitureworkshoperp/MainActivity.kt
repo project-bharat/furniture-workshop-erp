@@ -161,7 +161,7 @@ private fun WorkshopApp(database: WorkshopDatabase) {
     }
     deleting?.let { record ->
         AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete record?") },
-            text = { Text("“${record.title}” will be removed from this demo workspace.") },
+            text = { Text("“${record.title}” will be deleted from this device.") },
             confirmButton = { TextButton(onClick = { scope.launch { dao.deleteById(record.id) }; deleting = null }) { Text("Delete", color = Coral) } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } })
     }
