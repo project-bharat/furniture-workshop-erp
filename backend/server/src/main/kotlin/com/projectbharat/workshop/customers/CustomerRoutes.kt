@@ -148,7 +148,7 @@ fun Route.customerAndEnquiryRoutes(service: AuthService) {
                             statement.setNullable(8, input.notes); statement.setObject(9, UUID.fromString(user.id))
                             statement.executeQuery().use { rs ->
                                 rs.next()
-                                Triple(rs.getObject("id", UUID::class.java), rs.getString("enquiry_number"), rs.getTimestamp("created_at"))
+                                Triple(rs.getObject("id", UUID::class.java), rs.getTimestamp("created_at"), rs.getTimestamp("updated_at"))
                             }
                         }
                         connection.audit(user, "customer.created", "customer", id.first)
@@ -310,7 +310,7 @@ fun Route.customerAndEnquiryRoutes(service: AuthService) {
                             statement.setObject(10, UUID.fromString(user.organizationId)); statement.setObject(11, customerId)
                             statement.executeQuery().use { rs ->
                                 if (!rs.next()) throw AuthFailure(404, "Active customer not found")
-                                Triple(rs.getObject("id", UUID::class.java), rs.getTimestamp("created_at"), rs.getTimestamp("updated_at"))
+                                Triple(rs.getObject("id", UUID::class.java), rs.getString("enquiry_number"), rs.getTimestamp("created_at"))
                             }
                         }
                         connection.audit(user, "enquiry.created", "enquiry", id.first)
