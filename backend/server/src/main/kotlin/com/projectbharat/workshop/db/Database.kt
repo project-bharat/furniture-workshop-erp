@@ -15,10 +15,10 @@ object Database {
         instance?.let { return it }
         synchronized(this) {
             instance?.let { return it }
-            val jdbcUrl = environment["DATABASE_URL"] ?: environment["JDBC_DATABASE_URL"]
+            val databaseUrl = environment["DATABASE_URL"] ?: environment["JDBC_DATABASE_URL"]
                 ?: error("DATABASE_URL environment variable is required")
             val config = HikariConfig().apply {
-                jdbcUrl = normalizeJdbcUrl(jdbcUrl)
+                this.jdbcUrl = normalizeJdbcUrl(databaseUrl)
                 username = environment["DATABASE_USER"] ?: environment["PGUSER"] ?: ""
                 password = environment["DATABASE_PASSWORD"] ?: environment["PGPASSWORD"] ?: ""
                 maximumPoolSize = environment["DB_POOL_SIZE"]?.toIntOrNull()?.coerceIn(2, 20) ?: 10
