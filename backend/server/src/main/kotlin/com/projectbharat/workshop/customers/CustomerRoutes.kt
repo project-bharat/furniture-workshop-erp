@@ -139,7 +139,7 @@ fun Route.customerAndEnquiryRoutes(service: AuthService) {
                         val id = connection.prepareStatement(
                             """INSERT INTO customers(organization_id, display_name, customer_type, phone,
                                       alternate_phone, email, gstin, notes, created_by)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at, updated_at"""
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, enquiry_number, created_at, updated_at"""
                         ).use { statement ->
                             statement.setObject(1, UUID.fromString(user.organizationId))
                             statement.setString(2, name); statement.setString(3, type)
@@ -148,7 +148,7 @@ fun Route.customerAndEnquiryRoutes(service: AuthService) {
                             statement.setNullable(8, input.notes); statement.setObject(9, UUID.fromString(user.id))
                             statement.executeQuery().use { rs ->
                                 rs.next()
-                                Triple(rs.getObject("id", UUID::class.java), rs.getTimestamp("created_at"), rs.getTimestamp("updated_at"))
+                                Triple(rs.getObject("id", UUID::class.java), rs.getString("enquiry_number"), rs.getTimestamp("created_at"))
                             }
                         }
                         connection.audit(user, "customer.created", "customer", id.first)
@@ -315,7 +315,7 @@ fun Route.customerAndEnquiryRoutes(service: AuthService) {
                         }
                         connection.audit(user, "enquiry.created", "enquiry", id.first)
                         connection.commit()
-                        mapOf("id" to id.first.toString(), "enquiryNumber" to "ENQ")
+                        mapOf("id" to id.first.toString(), "enquiryNumber" to id.second, "createdAt" to id.third.toInstant().toString())
                     } catch (error: Throwable) { connection.rollback(); throw error }
                 }
                 call.respond(HttpStatusCode.Created, created)
