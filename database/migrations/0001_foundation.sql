@@ -211,7 +211,6 @@ FROM (VALUES
     ('WORKSHOP_MANAGER','production.manage'),
     ('WORKSHOP_MANAGER','tasks.update_assigned'),
     ('WORKSHOP_MANAGER','inventory.view'),
-    ('WORKSHOP_MANAGER','approvals.decide'),
     ('WORKSHOP_MANAGER','reports.view'),
     ('CARPENTER_WORKER','dashboard.view'),
     ('CARPENTER_WORKER','projects.view'),
