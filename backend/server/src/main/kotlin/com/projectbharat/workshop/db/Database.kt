@@ -18,7 +18,7 @@ object Database {
             val databaseUrl = environment["DATABASE_URL"] ?: environment["JDBC_DATABASE_URL"]
                 ?: error("DATABASE_URL environment variable is required")
             val config = HikariConfig().apply {
-                this.jdbcUrl = normalizeJdbcUrl(databaseUrl)
+                setJdbcUrl(normalizeJdbcUrl(databaseUrl))
                 username = environment["DATABASE_USER"] ?: environment["PGUSER"] ?: ""
                 password = environment["DATABASE_PASSWORD"] ?: environment["PGPASSWORD"] ?: ""
                 maximumPoolSize = environment["DB_POOL_SIZE"]?.toIntOrNull()?.coerceIn(2, 20) ?: 10
