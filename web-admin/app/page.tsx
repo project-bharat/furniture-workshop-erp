@@ -1,29 +1,41 @@
+import {
+  ArrowUpRight,
+  CheckCircle2,
+  ClipboardCheck,
+  FolderKanban,
+  Hammer,
+  LayoutDashboard,
+  MessageSquare,
+  Package,
+  Users,
+} from "lucide-react";
+
 const modules = [
-  { title: "Enquiries", description: "Customer requirements and follow-ups", icon: "01" },
-  { title: "Projects", description: "Rooms, furniture schedules and milestones", icon: "02" },
-  { title: "Production", description: "Workshop stages, jobs and assignments", icon: "03" },
-  { title: "Inventory", description: "Materials, stock and purchase requests", icon: "04" },
-  { title: "Workforce", description: "Attendance, tasks and work logs", icon: "05" },
-  { title: "Approvals", description: "Quotations, purchases and expenses", icon: "06" },
+  { title: "Enquiries", description: "Customer requirements and follow-ups", icon: <MessageSquare size={17} /> },
+  { title: "Projects", description: "Rooms, furniture schedules and milestones", icon: <FolderKanban size={17} /> },
+  { title: "Production", description: "Workshop stages, jobs and assignments", icon: <Hammer size={17} /> },
+  { title: "Inventory", description: "Materials, stock and purchase requests", icon: <Package size={17} /> },
+  { title: "Workforce", description: "Attendance, tasks and work logs", icon: <Users size={17} /> },
+  { title: "Approvals", description: "Quotations, purchases and expenses", icon: <ClipboardCheck size={17} /> },
 ];
 
 export default function HomePage() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#" aria-label="Workshop ERP home">
+        <a className="brand" href="#" aria-label="Aakruti Workshop ERP home">
           <span className="brand-mark">A</span>
-          <span><strong>WORKSHOP</strong><small>MANAGEMENT ERP</small></span>
+          <span><strong>AAKRUTI</strong><small>FURNITURE WORKSHOP ERP</small></span>
         </a>
         <div className="workspace-label">WORKSPACE</div>
         <nav className="nav-list" aria-label="Main navigation">
-          <a className="nav-item active" href="#"><span>▦</span> Overview</a>
-          <a className="nav-item" href="#"><span>◷</span> Enquiries</a>
-          <a className="nav-item" href="#"><span>▤</span> Projects</a>
-          <a className="nav-item" href="#"><span>⚒</span> Production</a>
-          <a className="nav-item" href="#"><span>▧</span> Inventory</a>
-          <a className="nav-item" href="#"><span>♙</span> Workforce</a>
-          <a className="nav-item" href="#"><span>✓</span> Approvals</a>
+          <a className="nav-item active" href="#"><LayoutDashboard size={16} /> Overview</a>
+          <a className="nav-item" href="#"><MessageSquare size={16} /> Enquiries</a>
+          <a className="nav-item" href="#"><FolderKanban size={16} /> Projects</a>
+          <a className="nav-item" href="#"><Hammer size={16} /> Production</a>
+          <a className="nav-item" href="#"><Package size={16} /> Inventory</a>
+          <a className="nav-item" href="#"><Users size={16} /> Workforce</a>
+          <a className="nav-item" href="#"><ClipboardCheck size={16} /> Approvals</a>
         </nav>
         <div className="sidebar-bottom">
           <span className="connection-dot" />
@@ -66,16 +78,16 @@ export default function HomePage() {
               <article className="module-card" key={module.title}>
                 <span className="module-number">{module.icon}</span>
                 <div><h3>{module.title}</h3><p>{module.description}</p></div>
-                <span className="module-arrow">↗</span>
+                <ArrowUpRight className="module-arrow" size={15} />
               </article>
             ))}
           </div>
 
           <section className="setup-card">
-            <div className="setup-icon">✓</div>
+            <div className="setup-icon"><CheckCircle2 size={16} /></div>
             <div><h2>Foundation workspace created</h2><p>Authentication, organization setup and live operational data will be connected in the next implementation steps. This screen currently uses no fabricated business figures.</p></div>
           </section>
-          <footer>Furniture Workshop ERP <span>·</span> Offline-first operations</footer>
+          <footer>Aakruti Enterprises <span>·</span> Furniture Workshop ERP <span>·</span> Offline-first operations</footer>
         </div>
       </section>
     </main>
