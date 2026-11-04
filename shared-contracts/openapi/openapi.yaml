@@ -1,0 +1,204 @@
+openapi: 3.1.0
+info:
+  title: Furniture Workshop ERP API
+  version: 1.0.0
+  description: Versioned REST API shared by the Android and web clients.
+servers:
+  - url: /api/v1
+tags:
+  - name: System
+  - name: Authentication
+  - name: Identity
+paths:
+  /health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: Service liveness check
+      security: []
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Authenticate a user and create a refresh session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      operationId: refreshSession
+      summary: Rotate a refresh token and issue a new access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Session rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: Revoke the current refresh session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '204':
+          description: Session revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /me:
+    get:
+      tags: [Identity]
+      operationId: getCurrentUser
+      summary: Return the current user, organization membership and effective permissions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Authentication is required or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, timestamp]
+      properties:
+        status: { type: string, const: ok }
+        service: { type: string, example: furniture-workshop-erp-api }
+        timestamp: { type: string, format: date-time }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [login, password, organizationId, device]
+      properties:
+        login: { type: string, minLength: 3, maxLength: 254, description: Email or phone number }
+        password: { type: string, minLength: 1, maxLength: 256, writeOnly: true }
+        organizationId: { type: string, format: uuid }
+        device:
+          type: object
+          required: [platform, name]
+          properties:
+            platform: { type: string, enum: [ANDROID, WEB] }
+            name: { type: string, maxLength: 120 }
+            appVersion: { type: string, maxLength: 40 }
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 32, writeOnly: true }
+    AuthResponse:
+      type: object
+      required: [accessToken, refreshToken, tokenType, expiresInSeconds]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        tokenType: { type: string, const: Bearer }
+        expiresInSeconds: { type: integer, minimum: 1 }
+    CurrentUserResponse:
+      type: object
+      required: [user, organization, permissions]
+      properties:
+        user:
+          type: object
+          required: [id, fullName]
+          properties:
+            id: { type: string, format: uuid }
+            fullName: { type: string }
+            email: { type: string, format: email, nullable: true }
+            phone: { type: string, nullable: true }
+        organization:
+          type: object
+          required: [id, displayName, defaultCurrency, timezone]
+          properties:
+            id: { type: string, format: uuid }
+            displayName: { type: string }
+            defaultCurrency: { type: string, minLength: 3, maxLength: 3 }
+            timezone: { type: string }
+            branchId: { type: string, format: uuid, nullable: true }
+        permissions:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+    ApiError:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
