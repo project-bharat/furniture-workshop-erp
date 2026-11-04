@@ -188,7 +188,7 @@ private fun replaceRecord(records: MutableList<WorkRecord>, record: WorkRecord) 
 private fun BrandLogo(modifier: Modifier = Modifier) {
     val logo = remember { drawable("logo_horizontal") }
     val darkLogo = remember { drawable("logo_horizontal_dark") }
-    val chosen = if (logo != 0) logo else darkLogo
+    val chosen = if (darkLogo != 0) darkLogo else logo
     if (chosen != 0) Image(
         painterResource(chosen), "Aakruti", modifier.height(32.dp).widthIn(max = 150.dp),
         contentScale = ContentScale.Fit
