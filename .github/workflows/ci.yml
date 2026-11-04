@@ -79,6 +79,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      - name: Install uploaded branding assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          RES=android-app/app/src/main/res
+          mkdir -p "$RES/drawable-nodpi" "$RES/mipmap-anydpi-v26" "$RES/mipmap-xxxhdpi"
+          BASE="https://raw.githubusercontent.com/project-bharat/furniture-workshop-erp/main/assets/branding"
+          curl -fsSL "$BASE/app-icon-background.png" -o "$RES/drawable-nodpi/app_icon_background.png"
+          curl -fsSL "$BASE/app-icon-foreground.png" -o "$RES/drawable-nodpi/app_icon_foreground.png"
+          curl -fsSL "$BASE/splash-screen.png" -o "$RES/drawable-nodpi/splash_screen.png"
+          curl -fsSL "$BASE/logo-horizontal.png" -o "$RES/drawable-nodpi/logo_horizontal.png"
+          curl -fsSL "$BASE/logo-horizontal-dark.png" -o "$RES/drawable-nodpi/logo_horizontal_dark.png"
+          curl -fsSL "$BASE/logo-light.png" -o "$RES/drawable-nodpi/logo_light.png"
+          curl -fsSL "$BASE/logo-dark.png" -o "$RES/drawable-nodpi/logo_dark.png"
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/app_icon_background" />
+              <foreground android:drawable="@drawable/app_icon_foreground" />
+          </adaptive-icon>
+          EOF
+          cp "$RES/drawable-nodpi/app_icon_foreground.png" "$RES/mipmap-xxxhdpi/ic_launcher.png"
       - name: Assemble Android debug APK
         working-directory: android-app
         run: gradle :app:assembleDebug
