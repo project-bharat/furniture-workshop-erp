@@ -1,12 +1,11 @@
 package com.projectbharat.workshop
 
-import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
+import io.ktor.server.application.install
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
@@ -23,15 +22,6 @@ fun Application.module() {
             explicitNulls = false
             encodeDefaults = true
         })
-    }
-    install(StatusPages) {
-        exception<Throwable> { call, cause ->
-            environment.log.error("Unhandled request failure", cause)
-            call.respond(
-                HttpStatusCode.InternalServerError,
-                ApiError(code = "INTERNAL_ERROR", message = "An unexpected error occurred.")
-            )
-        }
     }
 
     routing {
@@ -54,10 +44,4 @@ data class HealthResponse(
     val status: String,
     val service: String,
     val timestamp: String
-)
-
-@Serializable
-data class ApiError(
-    val code: String,
-    val message: String
 )
