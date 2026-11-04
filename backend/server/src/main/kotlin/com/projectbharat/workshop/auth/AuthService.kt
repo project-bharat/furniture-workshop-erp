@@ -217,7 +217,7 @@ class AuthService(
         val organizationId = runCatching { UUID.fromString(decoded.getClaim("organization_id").asString()) }.getOrElse {
             throw AuthFailure(401, "Access token is invalid")
         }
-        return dataSource.connection.use { connection ->
+        return database().connection.use { connection ->
             val row = connection.loadAuthRow(userId, organizationId)
                 ?: throw AuthFailure(401, "Account access is no longer active")
             row.user.copy(permissions = permissions(connection, row.roleId))
@@ -278,7 +278,7 @@ class AuthService(
     }
 
     private fun transaction(block: (Connection) -> TokenPair): TokenPair =
-        dataSource.connection.use { connection ->
+        database().connection.use { connection ->
             connection.autoCommit = false
             try {
                 val result = block(connection)
