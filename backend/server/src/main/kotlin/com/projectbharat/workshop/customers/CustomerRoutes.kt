@@ -139,7 +139,7 @@ fun Route.customerAndEnquiryRoutes(service: AuthService) {
                         val id = connection.prepareStatement(
                             """INSERT INTO customers(organization_id, display_name, customer_type, phone,
                                       alternate_phone, email, gstin, notes, created_by)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, enquiry_number, created_at, updated_at"""
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at, updated_at"""
                         ).use { statement ->
                             statement.setObject(1, UUID.fromString(user.organizationId))
                             statement.setString(2, name); statement.setString(3, type)
@@ -296,7 +296,7 @@ fun Route.customerAndEnquiryRoutes(service: AuthService) {
                                       description, priority, expected_value, next_follow_up_at, created_by)
                                SELECT ?, c.id, ?, ?, ?, ?, ?, ?, ?, ?
                                FROM customers c WHERE c.organization_id=? AND c.id=? AND c.archived_at IS NULL
-                               RETURNING id, created_at, updated_at"""
+                               RETURNING id, enquiry_number, created_at"""
                         ).use { statement ->
                             val enquiryNumber = "ENQ-" + UUID.randomUUID().toString().take(8).uppercase()
                             statement.setObject(1, UUID.fromString(user.organizationId)); statement.setString(2, enquiryNumber)
