@@ -6,7 +6,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
