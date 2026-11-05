@@ -129,7 +129,7 @@ fun Route.workforceRoutes(auth:AuthService) {
      }
     }
     c.audit(u,"attendance.batch_saved","attendance",UUID.randomUUID());c.commit()
-    normalized.map{(_,key,_)->c.prepareStatement("SELECT * FROM attendance_entries WHERE organization_id=? AND employee_id=? AND attendance_date=?").use{s->s.setObject(1,org);s.setObject(2,key.first.first);s.setObject(3,key.first.second);s.executeQuery().use{it.next();it.attendanceDto()}}}
+    normalized.map{(_,key,_)->c.prepareStatement("SELECT * FROM attendance_entries WHERE organization_id=? AND employee_id=? AND attendance_date=?").use{s->s.setObject(1,org);s.setObject(2,key.first);s.setObject(3,key.second);s.executeQuery().use{it.next();it.attendanceDto()}}}
    }catch(t:Throwable){c.rollback();throw t}}
    call.respond(rows)
   }catch(e:AuthFailure){call.fail(e)} }
@@ -187,7 +187,7 @@ fun Route.workforceRoutes(auth:AuthService) {
      val adj=c.prepareStatement("SELECT adjustment_type,amount FROM payroll_adjustments WHERE organization_id=? AND employee_id=? AND adjustment_date BETWEEN ? AND ? AND status<>'VOID'").use{s->s.setObject(1,org);s.setObject(2,e.id);s.setObject(3,first);s.setObject(4,last);s.executeQuery().use{rs->buildList{while(rs.next())add(rs.getString(1) to rs.getBigDecimal(2))}}}
      adj.forEach{(t,a)->when(t){"INCENTIVE"->earnings=earnings.add(a);"BONUS"->earnings=earnings.add(a);"DEDUCTION"->deductions=deductions.add(a)}}
      val gross=base.add(earnings);val available=gross.subtract(deductions).coerceAtLeast(BigDecimal.ZERO)
-     val advances=c.prepareStatement("SELECT id,amount,recovered_amount FROM payroll_adjustments WHERE organization_id=? AND employee_id=? AND adjustment_type='ADVANCE' AND adjustment_date<=? AND status IN('OPEN','PARTIALLY_SETTLED') ORDER BY adjustment_date,id FOR UPDATE").use{s->s.setObject(1,org);s.setObject(2,e.id);s.setObject(3,last);s.executeQuery().use{rs->buildList{while(rs.next())add(Advance(rs.getObject(1,UUID::class.java),rs.getBigDecimal(2),rs.getBigDecimal(3)))}}
+     val advances=c.prepareStatement("SELECT id,amount,recovered_amount FROM payroll_adjustments WHERE organization_id=? AND employee_id=? AND adjustment_type='ADVANCE' AND adjustment_date<=? AND status IN('OPEN','PARTIALLY_SETTLED') ORDER BY adjustment_date,id FOR UPDATE").use{s->s.setObject(1,org);s.setObject(2,e.id);s.setObject(3,last);s.executeQuery().use{rs->buildList{while(rs.next())add(Advance(rs.getObject(1,UUID::class.java),rs.getBigDecimal(2),rs.getBigDecimal(3)))}}}
      var recovery=BigDecimal.ZERO;advances.forEach{a->val remaining=a.amount.subtract(a.recovered).coerceAtLeast(BigDecimal.ZERO);recovery=recovery.add(remaining.min(available.subtract(recovery).coerceAtLeast(BigDecimal.ZERO)))}
      val net=available.subtract(recovery).coerceAtLeast(BigDecimal.ZERO)
      val item=c.prepareStatement("""INSERT INTO payroll_items(organization_id,payroll_run_id,employee_id,employee_name_snapshot,role_snapshot,monthly_salary_snapshot,working_days,present_days,half_days,paid_leave_days,unpaid_days,gross_pay,advance_recovery,net_pay)
