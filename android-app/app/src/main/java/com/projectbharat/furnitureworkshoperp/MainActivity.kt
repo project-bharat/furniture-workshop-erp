@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
 import java.util.Locale
+import java.util.Date
+import java.util.TimeZone
+import java.text.SimpleDateFormat
 
 private val Coral = Color(0xFFFF6666)
 private val Slate = Color(0xFF525266)
@@ -56,11 +59,13 @@ private fun WorkshopApp(database: WorkshopDatabase) {
     var query by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<WorkRecord?>(null) }
+    var selectedWorker by remember { mutableStateOf<WorkRecord?>(null) }
     var editing by remember { mutableStateOf<WorkRecord?>(null) }
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<WorkRecord?>(null) }
     val dao = remember(database) { database.workRecordDao() }
     val records by dao.observeAll().collectAsState(initial = emptyList())
+    val attendanceDao = remember(database) { database.attendanceDao() }
     val scope = rememberCoroutineScope()
     LaunchedEffect(dao) {
         if (dao.count() == 0) dao.insertAll(initialWorkshopRecords())
@@ -174,9 +179,7 @@ private fun pageKind(page: String) = when(page) {
 }
 @Composable
 private fun BrandLogo(modifier: Modifier = Modifier) {
-    val logo = remember { drawable("logo_horizontal") }
-    val darkLogo = remember { drawable("logo_horizontal_dark") }
-    val chosen = if (darkLogo != 0) darkLogo else logo
+    val chosen = remember { drawable("logo_horizontal") }
     if (chosen != 0) Image(
         painterResource(chosen), "Aakruti", modifier.height(32.dp).widthIn(max = 150.dp),
         contentScale = ContentScale.Fit
@@ -376,6 +379,7 @@ private fun RecordEditor(initial: WorkRecord?, defaultKind: String, onDismiss: (
     var phone by remember(initial) { mutableStateOf(initial?.phone ?: "") }
     var role by remember(initial) { mutableStateOf(initial?.role ?: "") }
     var task by remember(initial) { mutableStateOf(initial?.task ?: "") }
+    var monthlySalary by remember(initial) { mutableStateOf(initial?.monthlySalary?.takeIf { it > 0 }?.toString() ?: "") }
     var expanded by remember { mutableStateOf(false) }
     val kinds = listOf("Enquiry","Project","Production","Inventory","Workforce","Approval")
     AlertDialog(onDismissRequest = onDismiss,
@@ -394,6 +398,7 @@ private fun RecordEditor(initial: WorkRecord?, defaultKind: String, onDismiss: (
                     OutlinedTextField(role, { role = it }, label = { Text("Role / designation") }, singleLine = true)
                     OutlinedTextField(phone, { phone = it }, label = { Text("Phone") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
                     OutlinedTextField(task, { task = it }, label = { Text("Assigned task") }, singleLine = true)
+                    OutlinedTextField(monthlySalary, { monthlySalary = it }, label = { Text("Monthly salary ₹") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 }
                 if (kind in listOf("Project","Enquiry","Approval")) OutlinedTextField(amount, { amount = it }, label = { Text("Amount ₹") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 OutlinedTextField(status, { status = it }, label = { Text("Status") }, singleLine = true)
@@ -402,7 +407,7 @@ private fun RecordEditor(initial: WorkRecord?, defaultKind: String, onDismiss: (
         confirmButton = {
             TextButton(enabled = title.isNotBlank(), onClick = {
                 val attendance = if (kind == "Workforce") (initial?.attendance ?: "Absent") else ""
-                onSave(WorkRecord(initial?.id ?: 0,title.trim(),detail.trim(),status.trim().ifBlank{"New"},amount.toDoubleOrNull() ?: 0.0,kind,phone.trim(),role.trim(),attendance,task.trim()))
+                onSave(WorkRecord(initial?.id ?: 0,title.trim(),detail.trim(),status.trim().ifBlank{"New"},amount.toDoubleOrNull() ?: 0.0,kind,phone.trim(),role.trim(),attendance,task.trim(),monthlySalary.toDoubleOrNull() ?: 0.0))
             }) { Text("Save", color = Coral) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Slate) } }
