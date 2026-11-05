@@ -129,7 +129,7 @@ fun Route.workforceRoutes(auth:AuthService) {
      }
     }
     c.audit(u,"attendance.batch_saved","attendance",UUID.randomUUID());c.commit()
-    normalized.map{(_,key)->c.prepareStatement("SELECT * FROM attendance_entries WHERE organization_id=? AND employee_id=? AND attendance_date=?").use{s->s.setObject(1,org);s.setObject(2,key.first.first);s.setObject(3,key.first.second);s.executeQuery().use{it.next();it.attendanceDto()}}}
+    normalized.map{(_,key,_)->c.prepareStatement("SELECT * FROM attendance_entries WHERE organization_id=? AND employee_id=? AND attendance_date=?").use{s->s.setObject(1,org);s.setObject(2,key.first.first);s.setObject(3,key.first.second);s.executeQuery().use{it.next();it.attendanceDto()}}}
    }catch(t:Throwable){c.rollback();throw t}}
    call.respond(rows)
   }catch(e:AuthFailure){call.fail(e)} }
@@ -171,7 +171,7 @@ fun Route.workforceRoutes(auth:AuthService) {
     val old=c.prepareStatement("SELECT id,status FROM payroll_runs WHERE organization_id=? AND payroll_month=? AND branch_id IS NULL FOR UPDATE").use{s->s.setObject(1,org);s.setObject(2,first);s.executeQuery().use{if(it.next())it.getObject(1,UUID::class.java) to it.getString(2) else null}}
     if(old!=null&&old.second!="DRAFT")throw AuthFailure(409,"Only draft payroll can be recalculated")
     val run=old?.first?:c.prepareStatement("INSERT INTO payroll_runs(organization_id,payroll_month,prepared_by) VALUES(?,?,?) RETURNING id").use{s->s.setObject(1,org);s.setObject(2,first);s.setObject(3,UUID.fromString(u.id));s.executeQuery().use{it.next();it.getObject(1,UUID::class.java)}}
-    if(old!=null)c.prepareStatement("DELETE FROM payroll_items WHERE organization_id=? AND payroll_run_id=?").use{s->s.setObject(1,org);s.setObject(2,run);s.executeUpdate()}
+    if(old!=null){c.prepareStatement("DELETE FROM payroll_adjustment_recoveries WHERE organization_id=? AND payroll_item_id IN (SELECT id FROM payroll_items WHERE organization_id=? AND payroll_run_id=?)").use{s->s.setObject(1,org);s.setObject(2,org);s.setObject(3,run);s.executeUpdate()};c.prepareStatement("DELETE FROM payroll_items WHERE organization_id=? AND payroll_run_id=?").use{s->s.setObject(1,org);s.setObject(2,run);s.executeUpdate()}}
     val employees=c.prepareStatement("SELECT id,full_name,role_title,monthly_salary,weekly_off_day,joining_date,exit_date FROM employees WHERE organization_id=? AND archived_at IS NULL AND employment_status IN('ACTIVE','ON_LEAVE') AND COALESCE(joining_date,?)<=? AND (exit_date IS NULL OR exit_date>=?) ORDER BY lower(full_name)").use{s->s.setObject(1,org);s.setObject(2,last);s.setObject(3,last);s.setObject(4,first);s.executeQuery().use{rs->buildList{while(rs.next())add(EmployeePay(rs.getObject(1,UUID::class.java),rs.getString(2),rs.getString(3),rs.getBigDecimal(4),rs.getInt(5),rs.getObject(6,LocalDate::class.java),rs.getObject(7,LocalDate::class.java)))}}
     var grossTotal=BigDecimal.ZERO;var deductTotal=BigDecimal.ZERO;var netTotal=BigDecimal.ZERO
     employees.forEach{e->
