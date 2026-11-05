@@ -33,6 +33,12 @@ Passwords are BCrypt-hashed (cost 12, 12–72 characters). Refresh tokens are cr
 
 The first-owner bootstrap is guarded by a server-only secret and a PostgreSQL transaction-level advisory lock; it refuses setup after the first organization exists.
 
+## Local deployment with Docker
+
+From the repository root, provide `POSTGRES_PASSWORD`, `JWT_SECRET` (at least 32 random bytes) and `BOOTSTRAP_SECRET` in your shell or deployment secret store, then run `docker compose up --build -d`. PostgreSQL initializes a new volume by applying `database/migrations/*.sql` in filename order; the API waits for PostgreSQL health before starting. Existing database volumes are not re-initialized automatically, so apply any newly added migration once to an existing database before deploying the matching API. The API health check is `GET /api/v1/health` on port 8080.
+
+For the Next.js admin deployment, set `WORKSHOP_API_URL` to the public API origin plus `/api/v1`. Keep database credentials, JWT secret and bootstrap secret server-side only.
+
 ## API conventions
 
 - Base path: `/api/v1`
