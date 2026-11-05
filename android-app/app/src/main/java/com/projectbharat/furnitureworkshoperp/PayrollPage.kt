@@ -75,6 +75,10 @@ fun PayrollPage(workers: List<WorkRecord>, attendance: List<AttendanceEntry>, pa
         item {
             Button(onClick = {
                 scope.launch {
+                    if (!month.matches(Regex("\\d{4}-(0[1-9]|1[0-2])"))) {
+                        notice = "Enter a valid payroll month in YYYY-MM format."
+                        return@launch
+                    }
                     if (month > currentMonth()) {
                         notice = "Future payroll months cannot be calculated."
                         return@launch
