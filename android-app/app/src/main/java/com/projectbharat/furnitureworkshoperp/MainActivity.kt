@@ -176,6 +176,7 @@ private fun WorkshopApp(database: WorkshopDatabase) {
         onDismiss = { adding = false; editing = null },
         onSave = { value ->
             persist(if (editing == null) value.copy(id = 0) else value)
+            if (selectedWorker != null && editing != null) selectedWorker = value
             adding = false; editing = null
         }
     )
@@ -327,6 +328,137 @@ private fun ModulePage(
                 }
             }
         }
+    }
+}
+
+private fun todayDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+private fun currentMonth(): String = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
+private fun pickerDate(millis: Long): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    formatter.timeZone = TimeZone.getTimeZone("UTC")
+    return formatter.format(Date(millis))
+}
+
+@Composable
+private fun WorkforcePersonPage(
+    person: WorkRecord,
+    attendance: List<AttendanceEntry>,
+    onBack: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onSaveAttendance: (String, String, String) -> Unit
+) {
+    var chosenDate by remember(person.id) { mutableStateOf(todayDate()) }
+    var chosenStatus by remember(person.id) { mutableStateOf("Present") }
+    var note by remember(person.id) { mutableStateOf("") }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val monthEntries = attendance.filter { it.attendanceDate.startsWith(currentMonth()) }
+    val presentDays = monthEntries.count { it.status == "Present" }
+    val halfDays = monthEntries.count { it.status == "Half day" }
+    val absentDays = monthEntries.count { it.status == "Absent" }
+    val paidDays = presentDays + halfDays * 0.5
+    val earned = if (person.monthlySalary > 0) person.monthlySalary / 26.0 * paidDays else 0.0
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Slate) }
+                Column(Modifier.weight(1f)) {
+                    Text(person.title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Slate)
+                    Text(person.role.ifBlank { "Team member" }, fontSize = 11.sp, color = Slate.copy(.6f))
+                }
+                IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, "Edit person", tint = Coral) }
+                IconButton(onClick = onDelete) { Icon(Icons.Default.DeleteOutline, "Delete person", tint = Color(0xFFB23A3A)) }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Slate), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("MONTHLY SALARY SUMMARY", color = Color.White.copy(.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(if (person.monthlySalary > 0) money.format(person.monthlySalary) else "Salary not set", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column { Text(presentDays.toString(), color = Color.White, fontWeight = FontWeight.Bold); Text("Present", color = Color.White.copy(.7f), fontSize = 10.sp) }
+                        Column { Text(halfDays.toString(), color = Color.White, fontWeight = FontWeight.Bold); Text("Half days", color = Color.White.copy(.7f), fontSize = 10.sp) }
+                        Column { Text(absentDays.toString(), color = Color.White, fontWeight = FontWeight.Bold); Text("Absent", color = Color.White.copy(.7f), fontSize = 10.sp) }
+                    }
+                    HorizontalDivider(color = Color.White.copy(.2f))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Estimated earned this month", color = Color.White.copy(.7f), fontSize = 10.sp)
+                            Text(money.format(earned), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                        TextButton(onClick = onEdit) { Text("Edit salary", color = Color.White) }
+                    }
+                    Text("Estimate uses 26 working days per month; adjust salary and attendance before payroll.", color = Color.White.copy(.65f), fontSize = 9.sp)
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(12.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("Record attendance", fontWeight = FontWeight.Bold, color = Slate)
+                    OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.CalendarMonth, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(chosenDate)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        listOf("Present", "Absent", "Half day", "Leave").forEach { value ->
+                            FilterChip(selected = chosenStatus == value, onClick = { chosenStatus = value }, label = { Text(value, fontSize = 10.sp) })
+                        }
+                    }
+                    OutlinedTextField(
+                        value = note, onValueChange = { note = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Note (optional)") }, singleLine = true
+                    )
+                    Button(
+                        onClick = { onSaveAttendance(chosenDate, chosenStatus, note.trim()); note = "" },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Save attendance") }
+                }
+            }
+        }
+        item { Text("Attendance history", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Slate) }
+        if (attendance.isEmpty()) item { Text("No attendance entries recorded yet.", color = Slate.copy(.6f), fontSize = 12.sp) }
+        items(attendance, key = { it.id }) { entry ->
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(10.dp)) {
+                Row(Modifier.fillMaxWidth().padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(entry.attendanceDate, fontWeight = FontWeight.SemiBold, color = Slate, fontSize = 12.sp)
+                        if (entry.note.isNotBlank()) Text(entry.note, color = Slate.copy(.6f), fontSize = 10.sp)
+                    }
+                    Text(entry.status, color = if (entry.status == "Present") Color(0xFF27835A) else Coral, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(10.dp)) {
+                Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Contact & assignment", fontWeight = FontWeight.Bold, color = Slate)
+                    DetailLine("Phone", person.phone.ifBlank { "Not added" })
+                    DetailLine("Current task", person.task.ifBlank { "Not assigned" })
+                    DetailLine("Details", person.detail.ifBlank { "—" })
+                }
+            }
+        }
+    }
+    if (showDatePicker) {
+        val dateState = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dateState.selectedDateMillis?.let { chosenDate = pickerDate(it) }
+                    showDatePicker = false
+                }) { Text("Select") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+        ) { DatePicker(state = dateState) }
     }
 }
 
