@@ -28,3 +28,71 @@ footer{padding:28px 0 4px;color:#a39ca1;font-size:9px}footer span{padding:0 5px}
 @media(max-width:700px){.app-shell{display:block}.sidebar{min-height:auto;padding:14px;display:block}.brand{padding:0 3px 12px}.workspace-label,.nav-list,.sidebar-bottom{display:none}.topbar{height:58px;padding:0 17px}.content{padding:25px 17px}.page-heading{align-items:flex-start;flex-direction:column}.module-grid{grid-template-columns:1fr}.metric-grid{gap:9px}.metric-card{padding:14px;min-height:118px}.metric-card strong{font-size:23px}}
 
 .nav-item svg{flex:none;opacity:.88}.module-number svg{stroke-width:1.8}
+
+
+/* Authenticated workforce and payroll workspace */
+button,input,select{font:inherit}
+button{cursor:pointer}
+.nav-item{width:100%;border:0;background:transparent;text-align:left;font-family:inherit;cursor:pointer}
+.icon-button{width:34px;height:34px;border:1px solid var(--line);background:#fff;border-radius:9px;color:var(--slate);display:grid;place-items:center}
+.icon-button:hover,.secondary:hover{border-color:var(--coral);color:var(--coral)}
+.profile .icon-button{margin-left:3px}
+.primary,.secondary,.danger-outline{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;padding:10px 14px;font-size:11px;font-weight:700;white-space:nowrap}
+.primary{border:1px solid var(--coral);background:var(--coral);color:#fff}
+.primary:hover{background:#ef5757}.primary:disabled,.secondary:disabled{opacity:.5;cursor:not-allowed}
+.secondary{border:1px solid var(--line);background:#fff;color:var(--slate)}
+.danger-outline{border:1px solid #e8b7b7;background:#fff;color:#b54b4b}
+.full{width:100%;min-height:43px}
+.toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.month-input,.date-input{height:38px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--slate);padding:0 10px;font-size:11px}
+.search-field{height:38px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--muted)}
+.search-field input{width:160px;border:0;outline:0;font-size:11px;color:var(--slate)}
+.alert{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;margin:0 0 18px;border-radius:8px;font-size:11px}
+.alert button{border:0;background:transparent;color:inherit;display:grid;place-items:center}
+.alert.error{background:#fff0ef;color:#a33f3f;border:1px solid #f0d0ce}
+.alert.success{background:#edf7f1;color:#26734b;border:1px solid #d5eadc}
+.table-wrap{width:100%;overflow:auto;border:1px solid var(--line);border-radius:11px;background:#fff}
+table{width:100%;border-collapse:collapse;min-width:740px;text-align:left}
+th{padding:12px 14px;background:#faf8f6;color:var(--muted);font-size:9px;letter-spacing:.7px;text-transform:uppercase;font-weight:800;white-space:nowrap}
+td{padding:13px 14px;border-top:1px solid #f0ece8;font-size:10px;white-space:nowrap}
+td strong,td small{display:block}td strong{font-size:11px;color:var(--slate)}td small{font-size:9px;color:var(--muted);margin-top:4px}
+.text-action{border:0;background:transparent;color:#c74f50;font-size:10px;font-weight:800;padding:6px}
+.status{display:inline-flex;align-items:center;padding:5px 8px;border-radius:99px;background:#f1efed;color:#6e6870;font-size:8px;font-weight:800;letter-spacing:.4px;white-space:nowrap}
+.status.active,.status.paid,.status.approved{background:#eaf5ee;color:#287449}
+.status.draft,.status.on_leave,.status.partially_paid{background:#fff3e2;color:#956326}
+.status.exited,.status.void{background:#fbeceb;color:#a74b49}
+.empty{text-align:center;color:var(--muted);padding:25px}
+.detail-panel{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:17px;margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;font-size:11px}
+.detail-panel p{color:var(--muted);margin:7px 0}
+.attendance-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;font-size:10px;color:var(--muted)}
+.status-select,.note-input{height:34px;min-width:120px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--slate);padding:0 9px;font-size:10px}
+.note-input{min-width:150px}
+.history-grid,.adjustment-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:13px}
+.history-card,.adjustment-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:13px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.history-card strong,.adjustment-card strong{font-size:11px}
+.history-card div{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:9px}
+.adjustment-card{flex-direction:row;align-items:center;justify-content:space-between;gap:8px}
+.adjustment-card small{display:block;margin-top:4px;color:var(--muted);font-size:9px}
+.compact{padding:7px 9px;font-size:9px}
+.payroll-banner{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:16px;margin:15px 0;background:#fff;border:1px solid var(--line);border-radius:10px}
+.payroll-banner>div{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px 12px}
+.payroll-banner strong{font-size:12px}.payroll-banner small{grid-column:1/-1;color:var(--muted);font-size:10px}
+.empty-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:38px 15px;border:1px dashed var(--stone);border-radius:10px;background:#fff;color:var(--muted);text-align:center}
+.empty-card strong{font-size:12px;color:var(--slate)}.empty-card p{font-size:10px;margin:0}
+.metric-grid.three{grid-template-columns:repeat(3,minmax(0,1fr));margin:16px 0}
+.login-shell,.loading-screen{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--ivory)}
+.login-card{width:min(100%,410px);display:grid;gap:15px;padding:30px;background:#fff;border:1px solid var(--line);border-radius:14px}
+.login-brand{display:flex;align-items:center;gap:12px;margin-bottom:12px}.login-brand strong,.login-brand small{display:block}.login-brand strong{font-size:13px;letter-spacing:1.5px}.login-brand small{font-size:9px;letter-spacing:1px;color:var(--muted);margin-top:4px}
+.login-card h1{font-size:26px;margin:-8px 0 0}.login-card .subheading{margin:-7px 0 5px}
+.login-card label,.modal-form label{display:grid;gap:7px;color:var(--slate);font-size:10px;font-weight:700}
+.login-card input,.modal-form input,.modal-form select{height:40px;width:100%;border:1px solid var(--line);border-radius:7px;padding:0 11px;background:#fff;color:var(--slate);outline-color:var(--coral);font-size:11px}
+.muted{font-size:9px;color:var(--muted);line-height:1.6}
+.modal-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:18px;background:#211c2c80}
+.modal{width:min(100%,520px);max-height:90vh;overflow:auto;background:#fff;border-radius:13px;border:1px solid var(--line);padding:19px}
+.modal>header{display:flex;align-items:center;justify-content:space-between;margin-bottom:17px}
+.modal>header h2{margin:0;font-size:15px}
+.modal-form{display:grid;gap:13px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.payment-due{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:8px;background:#f8f5f2;font-size:10px}.payment-due strong{font-size:15px}
+.loading-screen{font-size:12px;color:var(--muted)}
+@media(max-width:900px){.history-grid,.adjustment-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.history-grid,.adjustment-grid{grid-template-columns:1fr}.metric-grid.three{grid-template-columns:1fr}.toolbar{width:100%}.search-field{flex:1}.search-field input{width:100%}.attendance-toolbar{align-items:flex-start;flex-direction:column}.payroll-banner{align-items:flex-start;flex-direction:column}.payroll-banner>div{grid-template-columns:1fr}.payroll-banner small{grid-column:auto}.form-grid{grid-template-columns:1fr}.login-card{padding:23px}}
