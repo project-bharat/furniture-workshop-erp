@@ -290,6 +290,37 @@ paths:
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
         '204': { description: Employee archived; payroll and attendance history retained }
+  /employees/{id}/salary-components:
+    get:
+      tags: [Payroll]
+      operationId: listEmployeeSalaryComponents
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: Effective-dated fixed or percentage earnings and deductions }
+        '404': { description: Employee not found }
+    post:
+      tags: [Payroll]
+      operationId: createEmployeeSalaryComponent
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SalaryComponentInput' } } }
+      responses:
+        '201': { description: Salary component created }
+        '409': { description: Duplicate effective-dated component }
+  /employees/{id}/salary-components/{componentId}:
+    delete:
+      tags: [Payroll]
+      operationId: disableEmployeeSalaryComponent
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: componentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Salary component disabled; historical payroll snapshots remain unchanged }
+        '404': { description: Active component not found }
   /attendance:
     get:
       tags: [Workforce]
@@ -484,6 +515,17 @@ paths:
             payBasis: { type: string }
             createdAt: { type: string, format: date-time }
             updatedAt: { type: string, format: date-time }
+    SalaryComponentInput:
+      type: object
+      required: [componentCode, componentName, componentType, calculationType, amount, effectiveFrom]
+      properties:
+        componentCode: { type: string, minLength: 1, maxLength: 40 }
+        componentName: { type: string, minLength: 1, maxLength: 100 }
+        componentType: { type: string, enum: [EARNING, DEDUCTION] }
+        calculationType: { type: string, enum: [FIXED, PERCENTAGE] }
+        amount: { type: number, exclusiveMinimum: 0, maximum: 100 }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: string, format: date, nullable: true }
     AttendanceEntryInput:
       type: object
       required: [employeeId, attendanceDate, status]
