@@ -122,6 +122,9 @@ interface WorkRecordDao {
 
 @Dao
 interface AttendanceDao {
+    @Query("SELECT * FROM attendance_entries ORDER BY attendanceDate DESC")
+    fun observeAll(): Flow<List<AttendanceEntry>>
+
     @Query("SELECT * FROM attendance_entries WHERE personId = :personId ORDER BY attendanceDate DESC")
     fun observeForPerson(personId: Int): Flow<List<AttendanceEntry>>
 
