@@ -79,7 +79,7 @@ fun PayrollPage(workers: List<WorkRecord>, attendance: List<AttendanceEntry>, pa
                         notice = "Enter a valid payroll month in YYYY-MM format."
                         return@launch
                     }
-                    if (month > currentMonth()) {
+                    if (month > SimpleDateFormat("yyyy-MM", Locale.US).format(Date())) {
                         notice = "Future payroll months cannot be calculated."
                         return@launch
                     }
