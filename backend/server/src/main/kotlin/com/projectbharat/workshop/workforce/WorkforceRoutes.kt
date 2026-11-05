@@ -128,7 +128,7 @@ fun Route.workforceRoutes(auth:AuthService) {
    delete("/{componentId}") { try {
     val u=call.authorize(auth,"payroll.manage");val id=call.parameters["id"]?.let{runCatching{UUID.fromString(it)}.getOrNull()}?:throw AuthFailure(400,"Employee id is invalid")
     val component=call.parameters["componentId"]?.let{runCatching{UUID.fromString(it)}.getOrNull()}?:throw AuthFailure(400,"Component id is invalid")
-    val n=Database.dataSource().connection.use{c->c.prepareStatement("UPDATE employee_salary_components SET is_active=false,effective_to=LEAST(COALESCE(effective_to,CURRENT_DATE),CURRENT_DATE) WHERE organization_id=? AND employee_id=? AND id=? AND is_active").use{s->s.setObject(1,UUID.fromString(u.organizationId));s.setObject(2,id);s.setObject(3,component);s.executeUpdate()}.also{if(it>0)c.audit(u,"payroll.salary_component_disabled","salary_component",component)}}
+    val n=Database.dataSource().connection.use{c->c.prepareStatement("UPDATE employee_salary_components SET is_active=false,effective_to=CASE WHEN effective_from>CURRENT_DATE THEN effective_from ELSE LEAST(COALESCE(effective_to,CURRENT_DATE),CURRENT_DATE) END WHERE organization_id=? AND employee_id=? AND id=? AND is_active").use{s->s.setObject(1,UUID.fromString(u.organizationId));s.setObject(2,id);s.setObject(3,component);s.executeUpdate()}.also{if(it>0)c.audit(u,"payroll.salary_component_disabled","salary_component",component)}}
     if(n==0)throw AuthFailure(404,"Active salary component not found");call.respond(HttpStatusCode.NoContent)
    }catch(e:AuthFailure){call.fail(e)} }
   }
