@@ -134,7 +134,7 @@ private fun WorkshopApp(database: WorkshopDatabase) {
                         else -> Icons.Default.Menu
                     }
                     NavigationBarItem(
-                        selected = page == name || (name == "More" && page in listOf("Enquiries","Workforce","Approvals")),
+                        selected = page == name || (name == "More" && page in listOf("Enquiries","Workforce","Payroll","Approvals")),
                         onClick = { page = name; selectedWorker = null; query = ""; searchOpen = false },
                         icon = { Icon(icon, null) }, label = { Text(name, fontSize = 10.sp) }
                     )
