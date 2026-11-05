@@ -17,6 +17,18 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
+@Entity(tableName = "sync_outbox", indices = [Index(value = ["state", "createdAt"])])
+data class SyncOutboxEntry(
+    @PrimaryKey val id: String,
+    val endpoint: String,
+    val httpMethod: String,
+    val payload: String,
+    val createdAt: String,
+    val state: String = "PENDING",
+    val attempts: Int = 0,
+    val lastError: String = ""
+)
+
 @Entity(tableName = "work_records")
 data class WorkRecord(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
@@ -100,6 +112,22 @@ data class AttendanceEntry(
 )
 
 @Dao
+interface SyncOutboxDao {
+    @Query("SELECT * FROM sync_outbox WHERE state = 'PENDING' ORDER BY createdAt ASC LIMIT :limit")
+    suspend fun pending(limit: Int): List<SyncOutboxEntry>
+    @Query("SELECT COUNT(*) FROM sync_outbox WHERE state = 'PENDING'")
+    suspend fun pendingCount(): Int
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun enqueue(entry: SyncOutboxEntry)
+    @Query("UPDATE sync_outbox SET state = 'SYNCED', lastError = '' WHERE id = :id")
+    suspend fun markSynced(id: String)
+    @Query("UPDATE sync_outbox SET state = 'FAILED', lastError = :error WHERE id = :id")
+    suspend fun markFailed(id: String, error: String)
+    @Query("UPDATE sync_outbox SET attempts = attempts + 1, lastError = :error WHERE id = :id")
+    suspend fun recordRetry(id: String, error: String)
+}
+
+@Dao
 interface WorkRecordDao {
     @Query("SELECT * FROM work_records ORDER BY id DESC")
     fun observeAll(): Flow<List<WorkRecord>>
@@ -169,11 +197,12 @@ interface PayrollDao {
 }
 
 @Database(
-    entities = [WorkRecord::class, AttendanceEntry::class, PayrollAdjustment::class, PayrollRecord::class, PayrollPayment::class],
-    version = 3,
+    entities = [WorkRecord::class, AttendanceEntry::class, PayrollAdjustment::class, PayrollRecord::class, PayrollPayment::class, SyncOutboxEntry::class],
+    version = 4,
     exportSchema = false
 )
 abstract class WorkshopDatabase : RoomDatabase() {
+    abstract fun syncOutboxDao(): SyncOutboxDao
     abstract fun workRecordDao(): WorkRecordDao
     abstract fun attendanceDao(): AttendanceDao
     abstract fun payrollDao(): PayrollDao
@@ -251,13 +280,31 @@ abstract class WorkshopDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS sync_outbox (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        endpoint TEXT NOT NULL,
+                        httpMethod TEXT NOT NULL,
+                        payload TEXT NOT NULL,
+                        createdAt TEXT NOT NULL,
+                        state TEXT NOT NULL,
+                        attempts INTEGER NOT NULL,
+                        lastError TEXT NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_outbox_state_createdAt ON sync_outbox(state, createdAt)")
+            }
+        }
+
         fun getInstance(context: Context): WorkshopDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     WorkshopDatabase::class.java,
                     "aakruti_workshop.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { INSTANCE = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { INSTANCE = it }
             }
     }
 }
