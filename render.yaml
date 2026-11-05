@@ -1,0 +1,48 @@
+# Free-tier deployment for the Furniture Workshop ERP.
+# Creates one Docker API service and one Node.js Next.js admin service.
+# PostgreSQL is hosted separately on Neon Free; do not use Render's 30-day free DB.
+services:
+  - type: web
+    name: furniture-workshop-erp-api-pb
+    runtime: docker
+    repo: https://github.com/project-bharat/furniture-workshop-erp
+    branch: feature/android-auth-offline-sync
+    region: singapore
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/server/Dockerfile
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: BOOTSTRAP_SECRET
+        generateValue: true
+      - key: JWT_ISSUER
+        value: furniture-workshop-erp
+      - key: JWT_AUDIENCE
+        value: furniture-workshop-clients
+
+  - type: web
+    name: furniture-workshop-erp-admin-pb
+    runtime: node
+    repo: https://github.com/project-bharat/furniture-workshop-erp
+    branch: feature/android-auth-offline-sync
+    rootDir: web-admin
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: WORKSHOP_API_URL
+        value: https://furniture-workshop-erp-api-pb.onrender.com/api/v1
