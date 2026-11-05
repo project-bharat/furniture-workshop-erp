@@ -32,6 +32,8 @@ import java.util.UUID
 @Serializable data class AttendanceInput(val employeeId:String,val attendanceDate:String,val status:String,val checkInAt:String?=null,val checkOutAt:String?=null,val regularHours:Double=0.0,val overtimeHours:Double=0.0,val note:String?=null)
 @Serializable data class AttendanceBatch(val entries:List<AttendanceInput>)
 @Serializable data class AttendanceDto(val id:String,val employeeId:String,val attendanceDate:String,val status:String,val checkInAt:String?,val checkOutAt:String?,val regularHours:Double,val overtimeHours:Double,val note:String?,val updatedAt:String)
+@Serializable data class SalaryComponentInput(val componentCode:String,val componentName:String,val componentType:String,val calculationType:String="FIXED",val amount:Double,val effectiveFrom:String,val effectiveTo:String?=null)
+@Serializable data class SalaryComponentDto(val id:String,val employeeId:String,val componentCode:String,val componentName:String,val componentType:String,val calculationType:String,val amount:Double,val active:Boolean,val effectiveFrom:String,val effectiveTo:String?)
 @Serializable data class AdjustmentInput(val employeeId:String,val adjustmentDate:String,val type:String,val amount:Double,val reason:String)
 @Serializable data class AdjustmentDto(val id:String,val employeeId:String,val adjustmentDate:String,val type:String,val amount:Double,val recoveredAmount:Double,val outstandingAmount:Double,val status:String,val reason:String)
 @Serializable data class PaymentInput(val amount:Double,val paymentDate:String,val paymentMethod:String,val referenceNumber:String?=null,val note:String?=null,val idempotencyKey:String)
@@ -101,6 +103,35 @@ fun Route.workforceRoutes(auth:AuthService) {
    val n=Database.dataSource().connection.use{c->c.prepareStatement("UPDATE employees SET archived_at=now(),employment_status='EXITED',exit_date=COALESCE(exit_date,CURRENT_DATE),updated_at=now() WHERE organization_id=? AND id=? AND archived_at IS NULL").use{s->s.setObject(1,UUID.fromString(u.organizationId));s.setObject(2,id);s.executeUpdate()}.also{if(it>0)c.audit(u,"employee.archived","employee",id)}}
    if(n==0)throw AuthFailure(404,"Employee not found");call.respond(HttpStatusCode.NoContent)
   }catch(e:AuthFailure){call.fail(e)} }
+  route("/{id}/salary-components") {
+   get { try {
+    val u=call.authorize(auth,"payroll.view");val id=call.parameters["id"]?.let{runCatching{UUID.fromString(it)}.getOrNull()}?:throw AuthFailure(400,"Employee id is invalid")
+    val rows=Database.dataSource().connection.use{c->c.prepareStatement("SELECT * FROM employee_salary_components WHERE organization_id=? AND employee_id=? ORDER BY effective_from DESC,component_name").use{s->s.setObject(1,UUID.fromString(u.organizationId));s.setObject(2,id);s.executeQuery().use{rs->buildList{while(rs.next())add(rs.salaryComponentDto())}}}}
+    call.respond(rows)
+   }catch(e:AuthFailure){call.fail(e)} }
+   post { try {
+    val u=call.authorize(auth,"payroll.manage");val id=call.parameters["id"]?.let{runCatching{UUID.fromString(it)}.getOrNull()}?:throw AuthFailure(400,"Employee id is invalid")
+    val x=call.receive<SalaryComponentInput>();val code=x.componentCode.trim().uppercase();val name=x.componentName.trim()
+    if(code.isBlank()||code.length>40||name.isBlank()||name.length>100)throw AuthFailure(400,"Component code and name are required")
+    if(x.componentType !in setOf("EARNING","DEDUCTION")||x.calculationType !in setOf("FIXED","PERCENTAGE"))throw AuthFailure(400,"Component type or calculation is invalid")
+    val amt=amount(x.amount,"Component amount");if(amt<=BigDecimal.ZERO)throw AuthFailure(400,"Component amount must be greater than zero")
+    if(x.calculationType=="PERCENTAGE"&&amt>BigDecimal("100"))throw AuthFailure(400,"Percentage components cannot exceed 100")
+    val from=date(x.effectiveFrom,"Effective from");val to=x.effectiveTo?.let{date(it,"Effective to")};if(to!=null&&to.isBefore(from))throw AuthFailure(400,"Effective to cannot precede effective from")
+    val org=UUID.fromString(u.organizationId)
+    val row=Database.dataSource().connection.use{c->c.autoCommit=false;try{
+     if(!c.hasEmployee(org,id))throw AuthFailure(404,"Employee not found")
+     val dto=c.prepareStatement("INSERT INTO employee_salary_components(organization_id,employee_id,component_code,component_name,component_type,calculation_type,amount,effective_from,effective_to) VALUES(?,?,?,?,?,?,?,?,?) RETURNING *").use{s->s.setObject(1,org);s.setObject(2,id);s.setString(3,code);s.setString(4,name);s.setString(5,x.componentType);s.setString(6,x.calculationType);s.setBigDecimal(7,amt);s.setObject(8,from);s.setObject(9,to);s.executeQuery().use{it.next();it.salaryComponentDto()}}
+     c.audit(u,"payroll.salary_component_created","salary_component",UUID.fromString(dto.id));c.commit();dto
+    }catch(t:Throwable){c.rollback();throw t}}
+    call.respond(HttpStatusCode.Created,row)
+   }catch(e:AuthFailure){call.fail(e)}catch(e:java.sql.SQLException){call.fail(AuthFailure(409,"A component with this code and effective date already exists"))} }
+   delete("/{componentId}") { try {
+    val u=call.authorize(auth,"payroll.manage");val id=call.parameters["id"]?.let{runCatching{UUID.fromString(it)}.getOrNull()}?:throw AuthFailure(400,"Employee id is invalid")
+    val component=call.parameters["componentId"]?.let{runCatching{UUID.fromString(it)}.getOrNull()}?:throw AuthFailure(400,"Component id is invalid")
+    val n=Database.dataSource().connection.use{c->c.prepareStatement("UPDATE employee_salary_components SET is_active=false,effective_to=LEAST(COALESCE(effective_to,CURRENT_DATE),CURRENT_DATE) WHERE organization_id=? AND employee_id=? AND id=? AND is_active").use{s->s.setObject(1,UUID.fromString(u.organizationId));s.setObject(2,id);s.setObject(3,component);s.executeUpdate()}.also{if(it>0)c.audit(u,"payroll.salary_component_disabled","salary_component",component)}}
+    if(n==0)throw AuthFailure(404,"Active salary component not found");call.respond(HttpStatusCode.NoContent)
+   }catch(e:AuthFailure){call.fail(e)} }
+  }
  }
  route("/attendance") {
   get { try {
@@ -241,6 +272,7 @@ private data class Advance(val id:UUID,val amount:BigDecimal,val recovered:BigDe
 private data class PayTarget(val employee:UUID,val net:BigDecimal,val paid:BigDecimal,val status:String,val run:UUID)
 private fun java.sql.ResultSet.employeeDto()=EmployeeDto(getObject("id",UUID::class.java).toString(),getString("employee_code"),getString("full_name"),getString("role_title"),getString("phone"),getString("email"),getString("employment_type"),getString("employment_status"),getObject("joining_date",LocalDate::class.java)?.toString(),getObject("exit_date",LocalDate::class.java)?.toString(),getBigDecimal("monthly_salary").toDouble(),getString("pay_basis"),getInt("weekly_off_day"),getObject("branch_id",UUID::class.java)?.toString(),getString("notes"),getTimestamp("created_at").toInstant().toString(),getTimestamp("updated_at").toInstant().toString())
 private fun java.sql.ResultSet.attendanceDto()=AttendanceDto(getObject("id",UUID::class.java).toString(),getObject("employee_id",UUID::class.java).toString(),getObject("attendance_date",LocalDate::class.java).toString(),getString("status"),getTimestamp("check_in_at")?.toInstant()?.toString(),getTimestamp("check_out_at")?.toInstant()?.toString(),getBigDecimal("regular_hours").toDouble(),getBigDecimal("overtime_hours").toDouble(),getString("note"),getTimestamp("updated_at").toInstant().toString())
+private fun java.sql.ResultSet.salaryComponentDto()=SalaryComponentDto(getObject("id",UUID::class.java).toString(),getObject("employee_id",UUID::class.java).toString(),getString("component_code"),getString("component_name"),getString("component_type"),getString("calculation_type"),getBigDecimal("amount").toDouble(),getBoolean("is_active"),getObject("effective_from",LocalDate::class.java).toString(),getObject("effective_to",LocalDate::class.java)?.toString())
 private fun java.sql.ResultSet.adjustmentDto()=AdjustmentDto(getObject("id",UUID::class.java).toString(),getObject("employee_id",UUID::class.java).toString(),getObject("adjustment_date",LocalDate::class.java).toString(),getString("adjustment_type"),getBigDecimal("amount").toDouble(),getBigDecimal("recovered_amount").toDouble(),getBigDecimal("amount").subtract(getBigDecimal("recovered_amount")).toDouble(),getString("status"),getString("reason"))
 private fun java.sql.ResultSet.paymentDto()=PaymentDto(getObject("id",UUID::class.java).toString(),getObject("payroll_item_id",UUID::class.java).toString(),getObject("employee_id",UUID::class.java).toString(),getObject("payment_date",LocalDate::class.java).toString(),getBigDecimal("amount").toDouble(),getString("payment_method"),getString("reference_number"),getString("note"))
 private data class PayrollItem(val id:String,val employee:String,val name:String,val role:String,val salary:Double,val working:Double,val present:Double,val half:Double,val paidLeave:Double,val unpaid:Double,val gross:Double,val recovery:Double,val net:Double,val paid:Double)
