@@ -4,6 +4,7 @@ import com.projectbharat.workshop.auth.AuthService
 import com.projectbharat.workshop.auth.authRoutes
 import com.projectbharat.workshop.db.Database
 import com.projectbharat.workshop.customers.customerAndEnquiryRoutes
+import com.projectbharat.workshop.workforce.workforceRoutes
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -42,6 +43,7 @@ fun Application.module() {
             val authService = AuthService()
             authRoutes(authService)
             customerAndEnquiryRoutes(authService)
+            workforceRoutes(authService)
         }
     }
 }
