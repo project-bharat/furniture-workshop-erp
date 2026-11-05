@@ -67,8 +67,14 @@ private fun WorkshopApp(database: WorkshopDatabase) {
     val records by dao.observeAll().collectAsState(initial = emptyList())
     val attendanceDao = remember(database) { database.attendanceDao() }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(dao) {
-        if (dao.count() == 0) dao.insertAll(initialWorkshopRecords())
+    LaunchedEffect(dao, attendanceDao) {
+        if (dao.count() == 0) {
+            val initial = initialWorkshopRecords()
+            dao.insertAll(initial)
+            initial.filter { it.kind == "Workforce" }.forEach { person ->
+                attendanceDao.save(AttendanceEntry(personId = person.id, attendanceDate = todayDate(), status = person.attendance.ifBlank { "Absent" }, note = "Initial attendance entry"))
+            }
+        }
     }
     fun persist(record: WorkRecord) {
         scope.launch {
@@ -127,7 +133,7 @@ private fun WorkshopApp(database: WorkshopDatabase) {
                     }
                     NavigationBarItem(
                         selected = page == name || (name == "More" && page in listOf("Enquiries","Workforce","Approvals")),
-                        onClick = { page = name; query = ""; searchOpen = false },
+                        onClick = { page = name; selectedWorker = null; query = ""; searchOpen = false },
                         icon = { Icon(icon, null) }, label = { Text(name, fontSize = 10.sp) }
                     )
                 }
@@ -137,7 +143,7 @@ private fun WorkshopApp(database: WorkshopDatabase) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (page) {
                 "Overview" -> Overview(records, onOpen = { page = it }, onAdd = { page = "Enquiries"; adding = true }, onSelect = { selected = it })
-                "More" -> MoreModules { page = it }
+                "More" -> MoreModules { page = it; selectedWorker = null }
                 else -> {
                     if (page == "Workforce" && selectedWorker != null) {
                         val person = selectedWorker!!
