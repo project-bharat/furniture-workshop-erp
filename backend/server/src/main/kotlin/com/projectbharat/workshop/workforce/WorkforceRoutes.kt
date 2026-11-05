@@ -212,7 +212,6 @@ fun Route.workforceRoutes(auth:AuthService) {
      var work=0;var present=0.0;var half=0.0;var paidLeave=0.0;var unpaid=0.0;var missing=0;var d=start
      while(!d.isAfter(scheduleEnd)){val status=att[d];val scheduled=d.dayOfWeek.value != (if(e.off==0) 7 else e.off) && status!="HOLIDAY" && status!="WEEKLY_OFF";if(scheduled){work++;if(!d.isAfter(attendanceEnd)){if(status==null)missing++;when(status){"PRESENT"->present++; "HALF_DAY"->{half++;unpaid+=.5};"PAID_LEAVE"->paidLeave++;"ABSENT","UNPAID_LEAVE"->unpaid++}}};d=d.plusDays(1)}
      if(missing>0)throw AuthFailure(409,"Attendance incomplete for "+e.name+": "+missing+" scheduled workday(s) are unmarked")
-      when(status){"PRESENT"->present++; "HALF_DAY"->{half++;unpaid+=.5};"PAID_LEAVE"->paidLeave++;"ABSENT","UNPAID_LEAVE"->unpaid++};d=d.plusDays(1)}
      val base=e.salary.multiply(BigDecimal.valueOf((work-unpaid).coerceAtLeast(0.0))).divide(BigDecimal.valueOf(work.coerceAtLeast(1).toLong()),2,RoundingMode.HALF_UP)
      var earnings=BigDecimal.ZERO;var deductions=BigDecimal.ZERO
      val components=c.prepareStatement("SELECT component_name,component_type,calculation_type,amount FROM employee_salary_components WHERE organization_id=? AND employee_id=? AND is_active AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)").use{s->s.setObject(1,org);s.setObject(2,e.id);s.setObject(3,last);s.setObject(4,first);s.executeQuery().use{rs->buildList{while(rs.next())add(Component(rs.getString(1),rs.getString(2),rs.getString(3),rs.getBigDecimal(4)))}}}
