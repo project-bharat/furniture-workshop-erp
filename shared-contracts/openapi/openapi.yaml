@@ -523,7 +523,7 @@ paths:
         componentName: { type: string, minLength: 1, maxLength: 100 }
         componentType: { type: string, enum: [EARNING, DEDUCTION] }
         calculationType: { type: string, enum: [FIXED, PERCENTAGE] }
-        amount: { type: number, exclusiveMinimum: 0, maximum: 100 }
+        amount: { type: number, exclusiveMinimum: 0, description: Percentage components are limited to 100; fixed components use INR amounts. }
         effectiveFrom: { type: string, format: date }
         effectiveTo: { type: string, format: date, nullable: true }
     AttendanceEntryInput:
