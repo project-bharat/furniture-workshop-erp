@@ -24,6 +24,7 @@ import java.sql.Timestamp
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
 import java.util.UUID
 
 @Serializable data class EmployeeInput(val fullName:String,val roleTitle:String,val monthlySalary:Double,val employeeCode:String?=null,val phone:String?=null,val email:String?=null,val employmentType:String="FULL_TIME",val employmentStatus:String="ACTIVE",val joiningDate:String?=null,val exitDate:String?=null,val weeklyOffDay:Int=0,val branchId:String?=null,val notes:String?=null)
@@ -165,20 +166,20 @@ fun Route.workforceRoutes(auth:AuthService) {
   }catch(e:AuthFailure){call.fail(e)} }
   post("/runs") { try {
    val u=call.authorize(auth,"payroll.manage");val x=call.receive<PayrollRunRequest>();val month=runCatching{YearMonth.parse(x.payrollMonth)}.getOrNull()?:throw AuthFailure(400,"Payroll month must use YYYY-MM")
-   val org=UUID.fromString(u.organizationId);val first=month.atDay(1);val last=month.atEndOfMonth()
+   val org=UUID.fromString(u.organizationId);val first=month.atDay(1);val last=month.atEndOfMonth();val today=LocalDate.now(ZoneId.of("Asia/Kolkata"));if(first.isAfter(today))throw AuthFailure(400,"Future payroll months cannot be calculated");val effectiveEnd=if(month==YearMonth.from(today))minOf(last,today) else last
    val result=Database.dataSource().connection.use{c->c.autoCommit=false;try{
     c.prepareStatement("SELECT pg_advisory_xact_lock(hashtext(?))").use{s->s.setString(1,org.toString()+month);s.execute()}
     val old=c.prepareStatement("SELECT id,status FROM payroll_runs WHERE organization_id=? AND payroll_month=? AND branch_id IS NULL FOR UPDATE").use{s->s.setObject(1,org);s.setObject(2,first);s.executeQuery().use{if(it.next())it.getObject(1,UUID::class.java) to it.getString(2) else null}}
     if(old!=null&&old.second!="DRAFT")throw AuthFailure(409,"Only draft payroll can be recalculated")
     val run=old?.first?:c.prepareStatement("INSERT INTO payroll_runs(organization_id,payroll_month,prepared_by) VALUES(?,?,?) RETURNING id").use{s->s.setObject(1,org);s.setObject(2,first);s.setObject(3,UUID.fromString(u.id));s.executeQuery().use{it.next();it.getObject(1,UUID::class.java)}}
     if(old!=null){c.prepareStatement("DELETE FROM payroll_adjustment_recoveries WHERE organization_id=? AND payroll_item_id IN (SELECT id FROM payroll_items WHERE organization_id=? AND payroll_run_id=?)").use{s->s.setObject(1,org);s.setObject(2,org);s.setObject(3,run);s.executeUpdate()};c.prepareStatement("DELETE FROM payroll_items WHERE organization_id=? AND payroll_run_id=?").use{s->s.setObject(1,org);s.setObject(2,run);s.executeUpdate()}}
-    val employees=c.prepareStatement("SELECT id,full_name,role_title,monthly_salary,weekly_off_day,joining_date,exit_date FROM employees WHERE organization_id=? AND archived_at IS NULL AND employment_status IN('ACTIVE','ON_LEAVE') AND COALESCE(joining_date,?)<=? AND (exit_date IS NULL OR exit_date>=?) ORDER BY lower(full_name)").use{s->s.setObject(1,org);s.setObject(2,last);s.setObject(3,last);s.setObject(4,first);s.executeQuery().use{rs->buildList{while(rs.next())add(EmployeePay(rs.getObject(1,UUID::class.java),rs.getString(2),rs.getString(3),rs.getBigDecimal(4),rs.getInt(5),rs.getObject(6,LocalDate::class.java),rs.getObject(7,LocalDate::class.java)))}}}
+    val employees=c.prepareStatement("SELECT id,full_name,role_title,monthly_salary,weekly_off_day,joining_date,exit_date FROM employees WHERE organization_id=? AND archived_at IS NULL AND employment_status IN('ACTIVE','ON_LEAVE') AND COALESCE(joining_date,?)<=? AND (exit_date IS NULL OR exit_date>=?) ORDER BY lower(full_name)").use{s->s.setObject(1,org);s.setObject(2,effectiveEnd);s.setObject(3,effectiveEnd);s.setObject(4,first);s.executeQuery().use{rs->buildList{while(rs.next())add(EmployeePay(rs.getObject(1,UUID::class.java),rs.getString(2),rs.getString(3),rs.getBigDecimal(4),rs.getInt(5),rs.getObject(6,LocalDate::class.java),rs.getObject(7,LocalDate::class.java)))}}}
     var grossTotal=BigDecimal.ZERO;var deductTotal=BigDecimal.ZERO;var netTotal=BigDecimal.ZERO
     employees.forEach{e->
-     val start=maxOf(first,e.joining?:first);val end=minOf(last,e.exit?:last)
+     val start=maxOf(first,e.joining?:first);val end=minOf(effectiveEnd,e.exit?:effectiveEnd)
      val att=c.prepareStatement("SELECT attendance_date,status FROM attendance_entries WHERE organization_id=? AND employee_id=? AND attendance_date BETWEEN ? AND ?").use{s->s.setObject(1,org);s.setObject(2,e.id);s.setObject(3,start);s.setObject(4,end);s.executeQuery().use{rs->buildMap{while(rs.next())put(rs.getObject(1,LocalDate::class.java),rs.getString(2))}}}
-     var work=0;var present=0.0;var half=0.0;var paidLeave=0.0;var unpaid=0.0;var d=start
-     while(!d.isAfter(end)){val status=att[d];if(d.dayOfWeek.value != (if(e.off==0) 7 else e.off)){if(status!="HOLIDAY"&&status!="WEEKLY_OFF")work++}
+     var work=0;var present=0.0;var half=0.0;var paidLeave=0.0;var unpaid=0.0;var missing=0;var d=start
+     while(!d.isAfter(end)){val status=att[d];if(d.dayOfWeek.value != (if(e.off==0) 7 else e.off)){if(status!="HOLIDAY"&&status!="WEEKLY_OFF"){work++;if(status==null)missing++}}
       when(status){"PRESENT"->present++; "HALF_DAY"->{half++;unpaid+=.5};"PAID_LEAVE"->paidLeave++;"ABSENT","UNPAID_LEAVE"->unpaid++};d=d.plusDays(1)}
      val base=e.salary.multiply(BigDecimal.valueOf((work-unpaid).coerceAtLeast(0.0))).divide(BigDecimal.valueOf(work.coerceAtLeast(1).toLong()),2,RoundingMode.HALF_UP)
      var earnings=BigDecimal.ZERO;var deductions=BigDecimal.ZERO
