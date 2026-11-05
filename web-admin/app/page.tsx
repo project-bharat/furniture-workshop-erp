@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
   Activity, ArrowDownToLine, Banknote, CalendarDays, Check, ChevronRight, ClipboardCheck,
   Clock3, CreditCard, FileText, LayoutDashboard, LogOut, Plus, RefreshCw, Search,
@@ -18,6 +19,7 @@ type Tab = "Overview"|"Workforce"|"Attendance"|"Payroll";
 const money=(v:number)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(v||0);
 const today=()=>new Date().toLocaleDateString("en-CA");
 const monthNow=()=>today().slice(0,7);
+const monthEnd=(m:string)=>{const [y,mm]=m.split("-").map(Number);return new Date(y,mm,0).toISOString().slice(0,10);};
 const statusLabel:Record<string,string>={PRESENT:"Present",ABSENT:"Absent",HALF_DAY:"Half day",PAID_LEAVE:"Paid leave",UNPAID_LEAVE:"Unpaid leave",HOLIDAY:"Holiday",WEEKLY_OFF:"Weekly off"};
 const attendanceOptions=["PRESENT","ABSENT","HALF_DAY","PAID_LEAVE","UNPAID_LEAVE","HOLIDAY","WEEKLY_OFF"];
 
@@ -56,14 +58,14 @@ export default function HomePage(){
  const loadData=useCallback(async()=>{
   const [people,days,pay]=await Promise.all([
    api<Employee[]>("employees"),
-   api<Attendance[]>("attendance?from="+month+"-01&to="+month+"-31"),
+   api<Attendance[]>("attendance?from="+month+"-01&to="+monthEnd(month)),
    api<PayrollOverview>("payroll?month="+month),
   ]);
   setEmployees(people);setAttendance(days);setPayroll(pay);
  },[month]);
 
  const checkSession=useCallback(async()=>{
-  try{const u=await api<User>("../session");setUser(u);await loadData();}
+  try{const response=await fetch("/api/session",{cache:"no-store"});if(!response.ok)throw new Error("Sign in required");const u=await response.json() as User;setUser(u);try{await loadData();}catch(e){setError(e instanceof Error?e.message:"Unable to load workspace data");}}
   catch{setUser(null);}
   finally{setLoading(false);}
  },[loadData]);
@@ -81,7 +83,7 @@ export default function HomePage(){
  const balanceThisMonth=activeRun?.items.reduce((sum,i)=>sum+i.balance,0)||0;
  const can=(permission:string)=>user?.permissions.includes(permission)||false;
 
- async function login(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try{const result=await api<{user:User}>("../session",{method:"POST",body:JSON.stringify({email,password})});setUser(result.user);setPassword("");await loadData();}catch(err){setError(err instanceof Error?err.message:"Sign in failed");}finally{setBusy(false);}}
+ async function login(e:FormEvent){e.preventDefault();setBusy(true);setError("");try{const response=await fetch("/api/session",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password})});const result=await response.json();if(!response.ok)throw new Error(result?.error||"Sign in failed");setUser(result.user);setPassword("");await loadData();}catch(err){setError(err instanceof Error?err.message:"Sign in failed");}finally{setBusy(false);}}
  async function logout(){await fetch("/api/session",{method:"DELETE"});setUser(null);setEmployees([]);setAttendance([]);setPayroll({runs:[],payments:[]});}
  async function refresh(){setBusy(true);setError("");try{await loadData();setMessage("Data refreshed");}catch(e){setError(e instanceof Error?e.message:"Refresh failed");}finally{setBusy(false);}}
  async function createEmployee(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try{
@@ -188,5 +190,5 @@ export default function HomePage(){
 }
 
 function Metric({label,value,detail}:{label:string;value:string;detail:string}){return <article className="metric-card"><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>}
-function Module({title,text,action,icon}:{title:string;text:string;action:()=>void;icon:React.ReactNode}){return <button className="module-card" onClick={action}><span className="module-number">{icon}</span><div><h3>{title}</h3><p>{text}</p></div><ChevronRight className="module-arrow" size={16}/></button>}
-function Modal({title,close,children}:{title:string;close:()=>void;children:React.ReactNode}){return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}><section className="modal"><header><h2>{title}</h2><button className="icon-button" type="button" onClick={close}><X size={17}/></button></header>{children}</section></div>}
+function Module({title,text,action,icon}:{title:string;text:string;action:()=>void;icon:ReactNode}){return <button className="module-card" onClick={action}><span className="module-number">{icon}</span><div><h3>{title}</h3><p>{text}</p></div><ChevronRight className="module-arrow" size={16}/></button>}
+function Modal({title,close,children}:{title:string;close:()=>void;children:ReactNode}){return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}><section className="modal"><header><h2>{title}</h2><button className="icon-button" type="button" onClick={close}><X size={17}/></button></header>{children}</section></div>}
