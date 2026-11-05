@@ -254,6 +254,483 @@ paths:
       responses:
         '200': { description: Enquiry status updated }
         '404': { description: Enquiry not found }
+  /employees:
+    get:
+      tags: [Workforce]
+      operationId: listEmployees
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Organization employees, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Employee' } } } } }
+    post:
+      tags: [Workforce]
+      operationId: createEmployee
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EmployeeInput' } } }
+      responses:
+        '201': { description: Employee created, content: { application/json: { schema: { $ref: '#/components/schemas/Employee' } } } }
+        '403': { description: Missing workforce.manage permission }
+  /employees/{id}:
+    patch:
+      tags: [Workforce]
+      operationId: updateEmployee
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EmployeeInput' } } }
+      responses:
+        '200': { description: Employee updated }
+        '404': { description: Employee not found }
+    delete:
+      tags: [Workforce]
+      operationId: archiveEmployee
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '204': { description: Employee archived; payroll and attendance history retained }
+  /attendance:
+    get:
+      tags: [Workforce]
+      operationId: listAttendance
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: employeeId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Date-wise attendance, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AttendanceEntry' } } } } }
+  /attendance/batch:
+    post:
+      tags: [Workforce]
+      operationId: upsertAttendanceBatch
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [entries], properties: { entries: { type: array, minItems: 1, maxItems: 500, items: { $ref: '#/components/schemas/AttendanceEntryInput' } } } } } }
+      responses:
+        '200': { description: Saved attendance entries }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /payroll:
+    get:
+      tags: [Payroll]
+      operationId: getPayrollOverview
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: month, in: query, schema: { type: string, pattern: '^[0-9]{4}-[0-9]{2}  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Authentication is required or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, timestamp]
+      properties:
+        status: { type: string, const: ok }
+        service: { type: string }
+        timestamp: { type: string, format: date-time }
+    BootstrapRequest:
+      type: object
+      additionalProperties: false
+      required: [bootstrapSecret, organizationName, legalName, ownerName, email, password]
+      properties:
+        bootstrapSecret: { type: string, writeOnly: true }
+        organizationName: { type: string, minLength: 1, maxLength: 160 }
+        legalName: { type: string, minLength: 1, maxLength: 200 }
+        branchName: { type: string, default: Main Workshop }
+        ownerName: { type: string, minLength: 1, maxLength: 160 }
+        email: { type: string, format: email, maxLength: 254 }
+        phone: { type: string, nullable: true, maxLength: 30 }
+        password: { type: string, minLength: 12, maxLength: 72, writeOnly: true }
+        deviceLabel: { type: string, nullable: true, maxLength: 120 }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 72, writeOnly: true }
+        deviceLabel: { type: string, nullable: true, maxLength: 120 }
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 40, writeOnly: true }
+        deviceLabel: { type: string, nullable: true, maxLength: 120 }
+    LogoutRequest:
+      type: object
+      properties:
+        refreshToken: { type: string, nullable: true, writeOnly: true }
+    TokenResponse:
+      type: object
+      required: [accessToken, refreshToken, tokenType, expiresIn, refreshExpiresIn, user]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string, writeOnly: true }
+        tokenType: { type: string, const: Bearer }
+        expiresIn: { type: integer, minimum: 60, maximum: 3600 }
+        refreshExpiresIn: { type: integer }
+        user:
+          $ref: '#/components/schemas/UserResponse'
+    UserResponse:
+      type: object
+      required: [id, name, organizationId, organizationName, membershipId, role, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email, nullable: true }
+        phone: { type: string, nullable: true }
+        organizationId: { type: string, format: uuid }
+        organizationName: { type: string }
+        membershipId: { type: string, format: uuid }
+        role: { type: string }
+        permissions:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+    CustomerRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 180 }
+        customerType: { type: string, enum: [INDIVIDUAL, BUSINESS], default: INDIVIDUAL }
+        phone: { type: string, nullable: true, maxLength: 30 }
+        alternatePhone: { type: string, nullable: true, maxLength: 30 }
+        email: { type: string, nullable: true, maxLength: 254 }
+        gstin: { type: string, nullable: true, maxLength: 15 }
+        notes: { type: string, nullable: true }
+    CustomerResponse:
+      type: object
+      required: [id, displayName, customerType, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+        customerType: { type: string }
+        phone: { type: string, nullable: true }
+        alternatePhone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        gstin: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EnquiryRequest:
+      type: object
+      required: [customerId, title]
+      properties:
+        customerId: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 180 }
+        description: { type: string, nullable: true }
+        source: { type: string, enum: [WALK_IN, PHONE, WHATSAPP, WEBSITE, REFERRAL, OTHER] }
+        priority: { type: string, enum: [LOW, NORMAL, HIGH, URGENT] }
+        expectedValue: { type: number, minimum: 0, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+    EnquiryResponse:
+      type: object
+      required: [id, enquiryNumber, customerId, customerName, title, source, status, priority, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        enquiryNumber: { type: string }
+        customerId: { type: string, format: uuid }
+        customerName: { type: string }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        source: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        expectedValue: { type: number, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EmployeeInput:
+      type: object
+      required: [fullName, roleTitle, monthlySalary]
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 180 }
+        roleTitle: { type: string, minLength: 1, maxLength: 100 }
+        monthlySalary: { type: number, minimum: 0 }
+        employeeCode: { type: string, nullable: true, maxLength: 40 }
+        phone: { type: string, nullable: true, maxLength: 30 }
+        email: { type: string, nullable: true, maxLength: 254 }
+        employmentType: { type: string, enum: [FULL_TIME, PART_TIME, CONTRACT, DAILY_WAGE] }
+        employmentStatus: { type: string, enum: [ACTIVE, ON_LEAVE, EXITED] }
+        joiningDate: { type: string, format: date, nullable: true }
+        exitDate: { type: string, format: date, nullable: true }
+        weeklyOffDay: { type: integer, minimum: 0, maximum: 6 }
+        branchId: { type: string, format: uuid, nullable: true }
+        notes: { type: string, nullable: true }
+    Employee:
+      allOf:
+        - $ref: '#/components/schemas/EmployeeInput'
+        - type: object
+          required: [id, createdAt, updatedAt, payBasis]
+          properties:
+            id: { type: string, format: uuid }
+            payBasis: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    AttendanceEntryInput:
+      type: object
+      required: [employeeId, attendanceDate, status]
+      properties:
+        employeeId: { type: string, format: uuid }
+        attendanceDate: { type: string, format: date }
+        status: { type: string, enum: [PRESENT, ABSENT, HALF_DAY, PAID_LEAVE, UNPAID_LEAVE, HOLIDAY, WEEKLY_OFF] }
+        checkInAt: { type: string, format: date-time, nullable: true }
+        checkOutAt: { type: string, format: date-time, nullable: true }
+        regularHours: { type: number, minimum: 0, maximum: 24 }
+        overtimeHours: { type: number, minimum: 0, maximum: 24 }
+        note: { type: string, nullable: true }
+    AttendanceEntry:
+      allOf:
+        - $ref: '#/components/schemas/AttendanceEntryInput'
+        - type: object
+          required: [id, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            updatedAt: { type: string, format: date-time }
+    PayrollAdjustmentInput:
+      type: object
+      required: [employeeId, adjustmentDate, type, amount, reason]
+      properties:
+        employeeId: { type: string, format: uuid }
+        adjustmentDate: { type: string, format: date }
+        type: { type: string, enum: [ADVANCE, DEDUCTION, INCENTIVE, BONUS] }
+        amount: { type: number, exclusiveMinimum: 0 }
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+    PayrollPaymentInput:
+      type: object
+      required: [amount, paymentDate, paymentMethod, idempotencyKey]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0 }
+        paymentDate: { type: string, format: date }
+        paymentMethod: { type: string, enum: [CASH, BANK_TRANSFER, UPI, CHEQUE, OTHER] }
+        referenceNumber: { type: string, nullable: true, maxLength: 100 }
+        note: { type: string, nullable: true }
+        idempotencyKey: { type: string, format: uuid }
+    PayrollOverview:
+      type: object
+      required: [runs, payments]
+      properties:
+        runs: { type: array, items: { type: object } }
+        payments: { type: array, items: { type: object } }
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+ } }
+      responses:
+        '200': { description: Payroll runs and payment history, content: { application/json: { schema: { $ref: '#/components/schemas/PayrollOverview' } } } }
+  /payroll/runs:
+    post:
+      tags: [Payroll]
+      operationId: calculatePayrollRun
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [payrollMonth], properties: { payrollMonth: { type: string, pattern: '^[0-9]{4}-[0-9]{2}  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Authentication is required or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, timestamp]
+      properties:
+        status: { type: string, const: ok }
+        service: { type: string }
+        timestamp: { type: string, format: date-time }
+    BootstrapRequest:
+      type: object
+      additionalProperties: false
+      required: [bootstrapSecret, organizationName, legalName, ownerName, email, password]
+      properties:
+        bootstrapSecret: { type: string, writeOnly: true }
+        organizationName: { type: string, minLength: 1, maxLength: 160 }
+        legalName: { type: string, minLength: 1, maxLength: 200 }
+        branchName: { type: string, default: Main Workshop }
+        ownerName: { type: string, minLength: 1, maxLength: 160 }
+        email: { type: string, format: email, maxLength: 254 }
+        phone: { type: string, nullable: true, maxLength: 30 }
+        password: { type: string, minLength: 12, maxLength: 72, writeOnly: true }
+        deviceLabel: { type: string, nullable: true, maxLength: 120 }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 72, writeOnly: true }
+        deviceLabel: { type: string, nullable: true, maxLength: 120 }
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 40, writeOnly: true }
+        deviceLabel: { type: string, nullable: true, maxLength: 120 }
+    LogoutRequest:
+      type: object
+      properties:
+        refreshToken: { type: string, nullable: true, writeOnly: true }
+    TokenResponse:
+      type: object
+      required: [accessToken, refreshToken, tokenType, expiresIn, refreshExpiresIn, user]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string, writeOnly: true }
+        tokenType: { type: string, const: Bearer }
+        expiresIn: { type: integer, minimum: 60, maximum: 3600 }
+        refreshExpiresIn: { type: integer }
+        user:
+          $ref: '#/components/schemas/UserResponse'
+    UserResponse:
+      type: object
+      required: [id, name, organizationId, organizationName, membershipId, role, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email, nullable: true }
+        phone: { type: string, nullable: true }
+        organizationId: { type: string, format: uuid }
+        organizationName: { type: string }
+        membershipId: { type: string, format: uuid }
+        role: { type: string }
+        permissions:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+    CustomerRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 180 }
+        customerType: { type: string, enum: [INDIVIDUAL, BUSINESS], default: INDIVIDUAL }
+        phone: { type: string, nullable: true, maxLength: 30 }
+        alternatePhone: { type: string, nullable: true, maxLength: 30 }
+        email: { type: string, nullable: true, maxLength: 254 }
+        gstin: { type: string, nullable: true, maxLength: 15 }
+        notes: { type: string, nullable: true }
+    CustomerResponse:
+      type: object
+      required: [id, displayName, customerType, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+        customerType: { type: string }
+        phone: { type: string, nullable: true }
+        alternatePhone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        gstin: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EnquiryRequest:
+      type: object
+      required: [customerId, title]
+      properties:
+        customerId: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 180 }
+        description: { type: string, nullable: true }
+        source: { type: string, enum: [WALK_IN, PHONE, WHATSAPP, WEBSITE, REFERRAL, OTHER] }
+        priority: { type: string, enum: [LOW, NORMAL, HIGH, URGENT] }
+        expectedValue: { type: number, minimum: 0, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+    EnquiryResponse:
+      type: object
+      required: [id, enquiryNumber, customerId, customerName, title, source, status, priority, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        enquiryNumber: { type: string }
+        customerId: { type: string, format: uuid }
+        customerName: { type: string }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        source: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        expectedValue: { type: number, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+ } } } } }
+      responses:
+        '201': { description: Draft payroll run calculated }
+        '409': { description: Existing payroll is not a draft and cannot be recalculated }
+  /payroll/runs/{id}/approve:
+    post:
+      tags: [Payroll]
+      operationId: approvePayrollRun
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: Payroll approved and locked }
+        '409': { description: Payroll is not a draft }
+  /payroll/adjustments:
+    get:
+      tags: [Payroll]
+      operationId: listPayrollAdjustments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: employeeId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Advances, deductions, incentives and bonuses }
+    post:
+      tags: [Payroll]
+      operationId: createPayrollAdjustment
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PayrollAdjustmentInput' } } }
+      responses:
+        '201': { description: Adjustment recorded }
+  /payroll/items/{id}/payments:
+    post:
+      tags: [Payroll]
+      operationId: recordPayrollPayment
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PayrollPaymentInput' } } }
+      responses:
+        '201': { description: Payment recorded; duplicate idempotency keys are safe }
+        '409': { description: Payroll must be approved or payment conflicts }
 components:
   securitySchemes:
     bearerAuth:
