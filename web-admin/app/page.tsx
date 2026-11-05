@@ -11,9 +11,10 @@ import {
 type User = { id:string; name:string; email:string|null; organizationName:string; role:string; permissions:string[] };
 type Employee = { id:string; employeeCode:string|null; fullName:string; roleTitle:string; phone:string|null; email:string|null; employmentType:string; employmentStatus:string; joiningDate:string|null; exitDate:string|null; monthlySalary:number; weeklyOffDay:number; notes:string|null };
 type Attendance = { id:string; employeeId:string; attendanceDate:string; status:string; checkInAt:string|null; checkOutAt:string|null; regularHours:number; overtimeHours:number; note:string|null };
-type PayrollItem = { id:string; employeeId:string; employeeName:string; roleTitle:string; monthlySalary:number; workingDays:number; presentDays:number; halfDays:number; paidLeaveDays:number; unpaidDays:number; grossPay:number; advanceRecovery:number; netPay:number; paidAmount:number; balance:number };
+type PayrollItem = { id:string; employeeId:string; employeeName:string; roleTitle:string; monthlySalary:number; workingDays:number; presentDays:number; halfDays:number; paidLeaveDays:number; unpaidDays:number; grossPay:number; otherDeductions:number; advanceRecovery:number; netPay:number; paidAmount:number; balance:number };
 type PayrollRun = { id:string; payrollMonth:string; status:string; employeeCount:number; grossTotal:number; deductionTotal:number; netTotal:number; items:PayrollItem[] };
 type Payment = { id:string; payrollItemId:string; employeeId:string; paymentDate:string; amount:number; paymentMethod:string; referenceNumber:string|null; note:string|null };
+type Adjustment = { id:string; employeeId:string; adjustmentDate:string; type:string; amount:number; recoveredAmount:number; outstandingAmount:number; status:string; reason:string };
 type PayrollOverview = { runs:PayrollRun[]; payments:Payment[] };
 type Tab = "Overview"|"Workforce"|"Attendance"|"Payroll";
 const money=(v:number)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(v||0);
@@ -42,6 +43,7 @@ export default function HomePage(){
  const [employees,setEmployees]=useState<Employee[]>([]);
  const [attendance,setAttendance]=useState<Attendance[]>([]);
  const [payroll,setPayroll]=useState<PayrollOverview>({runs:[],payments:[]});
+ const [adjustments,setAdjustments]=useState<Adjustment[]>([]);
  const [month,setMonth]=useState(monthNow());
  const [day,setDay]=useState(today());
  const [statuses,setStatuses]=useState<Record<string,string>>({});
@@ -55,17 +57,23 @@ export default function HomePage(){
  const [paymentForm,setPaymentForm]=useState({amount:"",paymentMethod:"UPI",referenceNumber:"",note:""});
  const [expandedEmployee,setExpandedEmployee]=useState<string|null>(null);
 
- const loadData=useCallback(async()=>{
-  const [people,days,pay]=await Promise.all([
+ const loadData=useCallback(async(permissions:string[]=user?.permissions||[])=>{
+  const [people,days]=await Promise.all([
    api<Employee[]>("employees"),
    api<Attendance[]>("attendance?from="+month+"-01&to="+monthEnd(month)),
-   api<PayrollOverview>("payroll?month="+month),
   ]);
-  setEmployees(people);setAttendance(days);setPayroll(pay);
- },[month]);
+  setEmployees(people);setAttendance(days);
+  if(permissions.includes("payroll.view")){
+   const [pay,adjustmentRows]=await Promise.all([
+    api<PayrollOverview>("payroll?month="+month),
+    api<Adjustment[]>("payroll/adjustments"),
+   ]);
+   setPayroll(pay);setAdjustments(adjustmentRows);
+  }else{setPayroll({runs:[],payments:[]});setAdjustments([]);}
+ },[month,user?.permissions]);
 
  const checkSession=useCallback(async()=>{
-  try{const response=await fetch("/api/session",{cache:"no-store"});if(!response.ok)throw new Error("Sign in required");const u=await response.json() as User;setUser(u);try{await loadData();}catch(e){setError(e instanceof Error?e.message:"Unable to load workspace data");}}
+  try{const response=await fetch("/api/session",{cache:"no-store"});if(!response.ok)throw new Error("Sign in required");const u=await response.json() as User;setUser(u);try{await loadData(u.permissions);}catch(e){setError(e instanceof Error?e.message:"Unable to load workspace data");}}
   catch{setUser(null);}
   finally{setLoading(false);}
  },[loadData]);
@@ -83,8 +91,8 @@ export default function HomePage(){
  const balanceThisMonth=activeRun?.items.reduce((sum,i)=>sum+i.balance,0)||0;
  const can=(permission:string)=>user?.permissions.includes(permission)||false;
 
- async function login(e:FormEvent){e.preventDefault();setBusy(true);setError("");try{const response=await fetch("/api/session",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password})});const result=await response.json();if(!response.ok)throw new Error(result?.error||"Sign in failed");setUser(result.user);setPassword("");await loadData();}catch(err){setError(err instanceof Error?err.message:"Sign in failed");}finally{setBusy(false);}}
- async function logout(){await fetch("/api/session",{method:"DELETE"});setUser(null);setEmployees([]);setAttendance([]);setPayroll({runs:[],payments:[]});}
+ async function login(e:FormEvent){e.preventDefault();setBusy(true);setError("");try{const response=await fetch("/api/session",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password})});const result=await response.json();if(!response.ok)throw new Error(result?.error||"Sign in failed");setUser(result.user);setPassword("");await loadData(result.user.permissions);}catch(err){setError(err instanceof Error?err.message:"Sign in failed");}finally{setBusy(false);}}
+ async function logout(){await fetch("/api/session",{method:"DELETE"});setUser(null);setEmployees([]);setAttendance([]);setPayroll({runs:[],payments:[]});setAdjustments([]);}
  async function refresh(){setBusy(true);setError("");try{await loadData();setMessage("Data refreshed");}catch(e){setError(e instanceof Error?e.message:"Refresh failed");}finally{setBusy(false);}}
  async function createEmployee(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try{
   await api<Employee>("employees",{method:"POST",body:JSON.stringify({...employeeForm,monthlySalary:Number(employeeForm.monthlySalary),weeklyOffDay:Number(employeeForm.weeklyOffDay),email:null,exitDate:null,branchId:null,notes:null})});
@@ -152,10 +160,12 @@ export default function HomePage(){
      <div className="metric-grid three"><Metric label="Gross payroll" value={money(activeRun?.grossTotal||0)} detail={activeRun?.status||"Not calculated"}/><Metric label="Paid" value={money(paidThisMonth)} detail="Payment ledger"/><Metric label="Outstanding" value={money(balanceThisMonth)} detail="Net salary balance"/></div>
      {!activeRun?<div className="empty-card"><FileText size={24}/><strong>No payroll run for {month}</strong><p>Calculate a draft after attendance and salary adjustments are updated.</p></div>:<>
       <div className="payroll-banner"><div><span className={"status "+activeRun.status.toLowerCase()}>{activeRun.status.replaceAll("_"," ")}</span><strong>{activeRun.employeeCount} employee payslips</strong><small>Gross {money(activeRun.grossTotal)} · Deductions {money(activeRun.deductionTotal)} · Net {money(activeRun.netTotal)}</small></div>{activeRun.status==="DRAFT"&&can("payroll.approve")&&<button className="primary" onClick={()=>approvePayroll(activeRun.id)} disabled={busy}><ShieldCheck size={15}/> Approve & lock</button>}</div>
-      <div className="table-wrap"><table><thead><tr><th>Employee</th><th>Attendance</th><th>Gross</th><th>Advance recovery</th><th>Net pay</th><th>Paid</th><th>Balance</th><th/></tr></thead><tbody>{activeRun.items.map(i=><tr key={i.id}><td><strong>{i.employeeName}</strong><small>{i.roleTitle}</small></td><td>{i.presentDays} present · {i.halfDays} half · {i.unpaidDays} unpaid / {i.workingDays} days</td><td>{money(i.grossPay)}</td><td>{money(i.advanceRecovery)}</td><td><strong>{money(i.netPay)}</strong></td><td>{money(i.paidAmount)}</td><td>{money(i.balance)}</td><td>{can("payroll.pay")&&["APPROVED","PARTIALLY_PAID"].includes(activeRun.status)&&i.balance>0&&<button className="text-action" onClick={()=>{setShowPayment(i);setPaymentForm({amount:String(i.balance),paymentMethod:"UPI",referenceNumber:"",note:""});}}>Record payment</button>}</td></tr>)}</tbody></table></div>
+      <div className="table-wrap"><table><thead><tr><th>Employee</th><th>Attendance</th><th>Gross</th><th>Other deductions</th><th>Advance recovery</th><th>Net pay</th><th>Paid</th><th>Balance</th><th/></tr></thead><tbody>{activeRun.items.map(i=><tr key={i.id}><td><strong>{i.employeeName}</strong><small>{i.roleTitle}</small></td><td>{i.presentDays} present · {i.halfDays} half · {i.unpaidDays} unpaid / {i.workingDays} days</td><td>{money(i.grossPay)}</td><td>{money(i.otherDeductions)}</td><td>{money(i.advanceRecovery)}</td><td><strong>{money(i.netPay)}</strong></td><td>{money(i.paidAmount)}</td><td>{money(i.balance)}</td><td>{can("payroll.pay")&&["APPROVED","PARTIALLY_PAID"].includes(activeRun.status)&&i.balance>0&&<button className="text-action" onClick={()=>{setShowPayment(i);setPaymentForm({amount:String(i.balance),paymentMethod:"UPI",referenceNumber:"",note:""});}}>Record payment</button>}</td></tr>)}</tbody></table></div>
      </>}
      <div className="section-heading"><div><h2>Advances, deductions and rewards</h2><p>Record a dated adjustment against an employee.</p></div></div>
      <div className="adjustment-grid">{employees.map(e=><article className="adjustment-card" key={e.id}><div><strong>{e.fullName}</strong><small>{e.roleTitle} · {money(e.monthlySalary)}/month</small></div><button className="secondary compact" disabled={!can("payroll.manage")} onClick={()=>{setShowAdjustment(e.id);setAdjustmentForm({type:"ADVANCE",amount:"",reason:""});}}><Plus size={14}/> Add component</button></article>)}</div>
+     <div className="section-heading"><div><h2>Adjustment ledger</h2><p>Advances, deductions, incentives and bonuses · outstanding advance balance is tracked separately</p></div></div>
+     <div className="table-wrap"><table><thead><tr><th>Date</th><th>Employee</th><th>Type</th><th>Reason</th><th>Amount</th><th>Recovered</th><th>Outstanding</th><th>Status</th></tr></thead><tbody>{adjustments.filter(a=>a.adjustmentDate.startsWith(month)).map(a=><tr key={a.id}><td>{a.adjustmentDate}</td><td>{employees.find(e=>e.id===a.employeeId)?.fullName||"Employee"}</td><td>{a.type}</td><td>{a.reason}</td><td>{money(a.amount)}</td><td>{money(a.recoveredAmount)}</td><td>{money(a.outstandingAmount)}</td><td><span className={"status "+a.status.toLowerCase()}>{a.status.replaceAll("_"," ")}</span></td></tr>)}{adjustments.filter(a=>a.adjustmentDate.startsWith(month)).length===0&&<tr><td colSpan={8} className="empty">No payroll adjustments for this month.</td></tr>}</tbody></table></div>
      <div className="section-heading"><div><h2>Payment history</h2><p>{payroll.payments.length} payments in {month}</p></div></div>
      <div className="table-wrap"><table><thead><tr><th>Date</th><th>Employee</th><th>Method</th><th>Reference</th><th>Amount</th></tr></thead><tbody>{payroll.payments.map(p=><tr key={p.id}><td>{p.paymentDate}</td><td>{employees.find(e=>e.id===p.employeeId)?.fullName||"Employee"}</td><td>{p.paymentMethod.replaceAll("_"," ")}</td><td>{p.referenceNumber||"—"}</td><td><strong>{money(p.amount)}</strong></td></tr>)}{payroll.payments.length===0&&<tr><td colSpan={5} className="empty">No salary payments recorded for this month.</td></tr>}</tbody></table></div>
      <div className="section-heading"><div><h2>Previous payroll runs</h2><p>Approved and historical monthly snapshots</p></div></div>
