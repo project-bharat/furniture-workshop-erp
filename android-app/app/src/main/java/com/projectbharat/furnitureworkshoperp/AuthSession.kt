@@ -84,6 +84,45 @@ class WorkshopApi(private val baseUrl: String, private val session: SecureSessio
             user
         }
 
+
+    suspend fun bootstrap(
+        base: String,
+        bootstrapSecret: String,
+        organizationName: String,
+        legalName: String,
+        branchName: String,
+        ownerName: String,
+        email: String,
+        phone: String,
+        password: String,
+        device: String,
+        store: SecureSession
+    ): SignedInUser = withContext(Dispatchers.IO) {
+        val response = WorkshopApi(base, store).call("/auth/bootstrap", "POST",
+            JSONObject()
+                .put("bootstrapSecret", bootstrapSecret)
+                .put("organizationName", organizationName.trim())
+                .put("legalName", legalName.trim())
+                .put("branchName", branchName.trim().ifBlank { "Main Workshop" })
+                .put("ownerName", ownerName.trim())
+                .put("email", email.trim())
+                .put("phone", phone.trim().ifBlank { JSONObject.NULL })
+                .put("password", password)
+                .put("deviceLabel", device))
+        val userJson = response.getJSONObject("user")
+        val permissions = userJson.optJSONArray("permissions")
+        val user = SignedInUser(
+            userJson.getString("id"), userJson.getString("name"),
+            userJson.optString("email").takeIf { it != "null" },
+            userJson.getString("organizationId"), userJson.getString("organizationName"),
+            userJson.getString("role"),
+            (0 until (permissions?.length() ?: 0)).map { permissions!!.getString(it) }.toSet()
+        )
+        store.save(AuthTokens(response.getString("accessToken"), response.getString("refreshToken"),
+            response.optLong("expiresIn", 900)), user)
+        user
+    }
+
     suspend fun authenticated(path: String, method: String = "GET", body: JSONObject? = null): JSONObject =
         withContext(Dispatchers.IO) {
             val access = session.accessToken() ?: throw ApiException(401, "Sign in required")
