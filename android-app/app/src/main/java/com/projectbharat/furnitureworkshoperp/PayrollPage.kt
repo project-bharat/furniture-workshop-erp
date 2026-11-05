@@ -75,24 +75,43 @@ fun PayrollPage(workers: List<WorkRecord>, attendance: List<AttendanceEntry>, pa
         item {
             Button(onClick = {
                 scope.launch {
-                    workers.forEach { worker ->
+                    if (month > currentMonth()) {
+                        notice = "Future payroll months cannot be calculated."
+                        return@launch
+                    }
+                    val cutoff = payCutoffDate(month)
+                    val eligible = workers.filter { worker ->
                         val old = payrollDao.findPayroll(worker.id, month)
-                        if (old != null && old.status != "DRAFT") return@forEach
-                        val entries = attendance.filter { it.personId == worker.id && it.attendanceDate.startsWith(month + "-") }
-                        val days = payWorkingDays(month, entries).toDouble()
+                        old == null || old.status == "DRAFT"
+                    }
+                    val incomplete = eligible.mapNotNull { worker ->
+                        val entries = attendance.filter { it.personId == worker.id && it.attendanceDate.startsWith(month + "-") && it.attendanceDate <= cutoff }
+                        val missing = payMissingWorkingDays(month, entries)
+                        if (missing > 0) worker.title + ": " + missing + " unmarked workday(s)" else null
+                    }
+                    if (incomplete.isNotEmpty()) {
+                        notice = "Attendance incomplete. " + incomplete.take(3).joinToString("; ")
+                        return@launch
+                    }
+                    eligible.forEach { worker ->
+                        val old = payrollDao.findPayroll(worker.id, month)
+                        val entries = attendance.filter { it.personId == worker.id && it.attendanceDate.startsWith(month + "-") && it.attendanceDate <= cutoff }
+                        val days = payWorkingDays(month, entries).toDouble().coerceAtLeast(1.0)
+                        val elapsedDays = payElapsedWorkingDays(month, entries).toDouble()
                         val present = entries.count { it.status == "Present" }.toDouble()
                         val half = entries.count { it.status == "Half day" }.toDouble()
                         val leave = entries.count { it.status == "Paid leave" || it.status == "Leave" }.toDouble()
                         val unpaid = (entries.count { it.status == "Absent" || it.status == "Unpaid leave" }).toDouble() + half * .5
-                        val base = (worker.monthlySalary - worker.monthlySalary / days * unpaid).coerceAtLeast(0.0)
-                        val current = adjustments.filter { it.personId == worker.id && it.adjustmentDate.startsWith(month + "-") }
+                        val paidDays = (elapsedDays - unpaid).coerceAtLeast(0.0)
+                        val base = (worker.monthlySalary / days * paidDays).coerceAtLeast(0.0)
+                        val current = adjustments.filter { it.personId == worker.id && it.adjustmentDate.startsWith(month + "-") && it.adjustmentDate <= cutoff }
                         val incentive = current.filter { it.type == "INCENTIVE" }.sumOf { it.amount }
                         val bonus = current.filter { it.type == "BONUS" }.sumOf { it.amount }
                         val deduction = current.filter { it.type == "DEDUCTION" }.sumOf { it.amount }
-                        val advances = adjustments.filter { it.personId == worker.id && it.type == "ADVANCE" && it.adjustmentDate <= month + "-31" && it.amount > it.recoveredAmount }.sortedBy { it.adjustmentDate }
+                        val advances = adjustments.filter { it.personId == worker.id && it.type == "ADVANCE" && it.adjustmentDate <= cutoff && it.amount > it.recoveredAmount }.sortedBy { it.adjustmentDate }
                         val recovery = advances.sumOf { (it.amount-it.recoveredAmount).coerceAtLeast(0.0) }.coerceAtMost((base+incentive+bonus-deduction).coerceAtLeast(0.0))
                         val gross = base + incentive + bonus
-                        payrollDao.savePayroll(PayrollRecord(id=old?.id ?: 0, personId=worker.id, payrollMonth=month, monthlySalary=worker.monthlySalary, workingDays=days, presentDays=present, halfDays=half, paidLeaveDays=leave, unpaidDays=unpaid, paidDays=(days-unpaid).coerceAtLeast(0.0), incentives=incentive, bonuses=bonus, otherDeductions=deduction, advanceRecovery=recovery, grossPay=gross, netPay=(gross-deduction-recovery).coerceAtLeast(0.0), status="DRAFT", createdAt=payToday()))
+                        payrollDao.savePayroll(PayrollRecord(id=old?.id ?: 0, personId=worker.id, payrollMonth=month, monthlySalary=worker.monthlySalary, workingDays=days, presentDays=present, halfDays=half, paidLeaveDays=leave, unpaidDays=unpaid, paidDays=paidDays, incentives=incentive, bonuses=bonus, otherDeductions=deduction, advanceRecovery=recovery, grossPay=gross, netPay=(gross-deduction-recovery).coerceAtLeast(0.0), status="DRAFT", createdAt=payToday()))
                     }
                     notice = "Draft payroll calculated for " + month
                 }
@@ -262,19 +281,65 @@ private fun PayMetric(label: String, value: Double, modifier: Modifier) {
         Text(payMoney.format(value), color = paySlate, fontWeight = FontWeight.Bold, fontSize = 10.sp)
     }
 }
-private fun payWorkingDays(month: String, entries: List<AttendanceEntry>): Int {
-    val p = month.split("-")
-    val y = p.getOrNull(0)?.toIntOrNull() ?: return 26
-    val m = p.getOrNull(1)?.toIntOrNull() ?: return 26
+private fun payCutoffDate(month: String): String {
+    val parts = month.split("-")
+    val year = parts.getOrNull(0)?.toIntOrNull() ?: return payToday()
+    val monthNumber = parts.getOrNull(1)?.toIntOrNull() ?: return payToday()
     val calendar = Calendar.getInstance()
-    calendar.set(y, (m-1).coerceIn(0, 11), 1)
+    calendar.set(year, (monthNumber - 1).coerceIn(0, 11), 1)
+    calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
+    val monthEnd = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.time)
+    return minOf(monthEnd, payToday())
+}
+private fun payWorkingDays(month: String, entries: List<AttendanceEntry>): Int {
+    val parts = month.split("-")
+    val year = parts.getOrNull(0)?.toIntOrNull() ?: return 26
+    val monthNumber = parts.getOrNull(1)?.toIntOrNull() ?: return 26
+    val calendar = Calendar.getInstance()
+    calendar.set(year, (monthNumber - 1).coerceIn(0, 11), 1)
     val off = entries.filter { it.status == "Holiday" || it.status == "Weekly off" }.map { it.attendanceDate }.toSet()
     var count = 0
-    for (d in 1..calendar.getActualMaximum(Calendar.DAY_OF_MONTH)) {
-        calendar.set(Calendar.DAY_OF_MONTH, d)
-        val date = String.format(Locale.US, "%04d-%02d-%02d", y, m, d)
+    for (day in 1..calendar.getActualMaximum(Calendar.DAY_OF_MONTH)) {
+        calendar.set(Calendar.DAY_OF_MONTH, day)
+        val date = String.format(Locale.US, "%04d-%02d-%02d", year, monthNumber, day)
         if (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY && date !in off) count++
     }
     return count.coerceAtLeast(1)
+}
+private fun payElapsedWorkingDays(month: String, entries: List<AttendanceEntry>): Int {
+    val parts = month.split("-")
+    val year = parts.getOrNull(0)?.toIntOrNull() ?: return 0
+    val monthNumber = parts.getOrNull(1)?.toIntOrNull() ?: return 0
+    val calendar = Calendar.getInstance()
+    calendar.set(year, (monthNumber - 1).coerceIn(0, 11), 1)
+    val cutoff = payCutoffDate(month)
+    val off = entries.filter { it.status == "Holiday" || it.status == "Weekly off" }.map { it.attendanceDate }.toSet()
+    var count = 0
+    val last = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+    for (day in 1..last) {
+        calendar.set(Calendar.DAY_OF_MONTH, day)
+        val date = String.format(Locale.US, "%04d-%02d-%02d", year, monthNumber, day)
+        if (date > cutoff) break
+        if (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY && date !in off) count++
+    }
+    return count
+}
+private fun payMissingWorkingDays(month: String, entries: List<AttendanceEntry>): Int {
+    val parts = month.split("-")
+    val year = parts.getOrNull(0)?.toIntOrNull() ?: return 0
+    val monthNumber = parts.getOrNull(1)?.toIntOrNull() ?: return 0
+    val calendar = Calendar.getInstance()
+    calendar.set(year, (monthNumber - 1).coerceIn(0, 11), 1)
+    val cutoff = payCutoffDate(month)
+    val marked = entries.map { it.attendanceDate }.toSet()
+    val off = entries.filter { it.status == "Holiday" || it.status == "Weekly off" }.map { it.attendanceDate }.toSet()
+    var missing = 0
+    for (day in 1..calendar.getActualMaximum(Calendar.DAY_OF_MONTH)) {
+        calendar.set(Calendar.DAY_OF_MONTH, day)
+        val date = String.format(Locale.US, "%04d-%02d-%02d", year, monthNumber, day)
+        if (date > cutoff) break
+        if (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY && date !in off && date !in marked) missing++
+    }
+    return missing
 }
 private fun payToday() = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
