@@ -118,7 +118,7 @@ fun Route.workforceRoutes(auth:AuthService) {
    val normalized=batch.entries.map{x->val id=runCatching{UUID.fromString(x.employeeId)}.getOrNull()?:throw AuthFailure(400,"Employee id is invalid");val d=date(x.attendanceDate,"Attendance date");val st=x.status.uppercase();if(st !in attendanceStates)throw AuthFailure(400,"Attendance status is invalid");if(!x.regularHours.isFinite()||!x.overtimeHours.isFinite()||x.regularHours !in 0.0..24.0||x.overtimeHours !in 0.0..24.0)throw AuthFailure(400,"Hours must be between 0 and 24");Triple(x,id to d,st)}
    if(normalized.map{it.second to it.third}.distinct().size!=normalized.size)throw AuthFailure(400,"Duplicate employee/date entries in batch")
    val rows=Database.dataSource().connection.use{c->c.autoCommit=false;try{
-    normalized.forEach{(x,key)->val id=key.first.first;val d=key.first.second;val st=key.second
+     normalized.forEach{(x,key,st)->val id=key.first;val d=key.second
      if(!c.hasEmployee(org,id))throw AuthFailure(404,"Employee not found")
      val ci=x.checkInAt?.let{Timestamp.from(runCatching{Instant.parse(it)}.getOrElse{throw AuthFailure(400,"checkInAt must be ISO-8601")})}
      val co=x.checkOutAt?.let{Timestamp.from(runCatching{Instant.parse(it)}.getOrElse{throw AuthFailure(400,"checkOutAt must be ISO-8601")})}
