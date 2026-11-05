@@ -138,12 +138,35 @@ private fun WorkshopApp(database: WorkshopDatabase) {
             when (page) {
                 "Overview" -> Overview(records, onOpen = { page = it }, onAdd = { page = "Enquiries"; adding = true }, onSelect = { selected = it })
                 "More" -> MoreModules { page = it }
-                else -> ModulePage(
-                    page = page, data = currentRecords, allData = records,
-                    onOpen = { selected = it },
-                    onStatus = { record, status -> persist(record.copy(status = status, attendance = if (record.kind == "Workforce") status else record.attendance)) },
-                    onAttendance = { record -> val next = if (record.attendance == "Present") "Absent" else "Present"; persist(record.copy(attendance = next, status = next)) }
-                )
+                else -> {
+                    if (page == "Workforce" && selectedWorker != null) {
+                        val person = selectedWorker!!
+                        WorkforcePersonPage(
+                            person = person,
+                            attendance = attendanceDao.observeForPerson(person.id).collectAsState(initial = emptyList()).value,
+                            onBack = { selectedWorker = null },
+                            onEdit = { editing = person },
+                            onDelete = { deleting = person },
+                            onSaveAttendance = { date, status, note ->
+                                scope.launch {
+                                    attendanceDao.save(AttendanceEntry(personId = person.id, attendanceDate = date, status = status, note = note))
+                                    if (date == todayDate()) persist(person.copy(attendance = status, status = status))
+                                }
+                            }
+                        )
+                    } else ModulePage(
+                        page = page, data = currentRecords, allData = records,
+                        onOpen = { if (page == "Workforce") selectedWorker = it else selected = it },
+                        onStatus = { record, status -> persist(record.copy(status = status, attendance = if (record.kind == "Workforce") status else record.attendance)) },
+                        onAttendance = { record ->
+                            val next = if (record.attendance == "Present") "Absent" else "Present"
+                            scope.launch {
+                                attendanceDao.save(AttendanceEntry(personId = record.id, attendanceDate = todayDate(), status = next))
+                                persist(record.copy(attendance = next, status = next))
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -167,7 +190,7 @@ private fun WorkshopApp(database: WorkshopDatabase) {
     deleting?.let { record ->
         AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete record?") },
             text = { Text("“${record.title}” will be deleted from this device.") },
-            confirmButton = { TextButton(onClick = { scope.launch { dao.deleteById(record.id) }; deleting = null }) { Text("Delete", color = Coral) } },
+            confirmButton = { TextButton(onClick = { scope.launch { dao.deleteById(record.id); if (record.kind == "Workforce") attendanceDao.deleteForPerson(record.id) }; deleting = null; selectedWorker = null }) { Text("Delete", color = Coral) } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } })
     }
 }
