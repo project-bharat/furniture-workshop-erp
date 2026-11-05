@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -116,7 +118,7 @@ private fun WorkshopApp(database: WorkshopDatabase) {
             }
         },
         floatingActionButton = {
-            if (page != "Overview" && page != "More") FloatingActionButton(
+            if (page != "Overview" && page != "More" && page != "Payroll") FloatingActionButton(
                 onClick = { editing = null; adding = true },
                 containerColor = Coral, contentColor = Color.White
             ) { Icon(Icons.Default.Add, "Add record") }
@@ -145,7 +147,13 @@ private fun WorkshopApp(database: WorkshopDatabase) {
                 "Overview" -> Overview(records, onOpen = { page = it }, onAdd = { page = "Enquiries"; adding = true }, onSelect = { selected = it })
                 "More" -> MoreModules { page = it; selectedWorker = null }
                 else -> {
-                    if (page == "Workforce" && selectedWorker != null) {
+                    if (page == "Payroll") {
+                        PayrollPage(
+                            workers = records.filter { it.kind == "Workforce" },
+                            attendance = attendanceDao.observeAll().collectAsState(initial = emptyList()).value,
+                            payrollDao = remember(database) { database.payrollDao() }
+                        )
+                    } else if (page == "Workforce" && selectedWorker != null) {
                         val person = selectedWorker!!
                         WorkforcePersonPage(
                             person = person,
@@ -204,7 +212,7 @@ private fun WorkshopApp(database: WorkshopDatabase) {
 
 private fun pageKind(page: String) = when(page) {
     "Enquiries" -> "Enquiry"; "Projects" -> "Project"; "Production" -> "Production"
-    "Inventory" -> "Inventory"; "Workforce" -> "Workforce"; "Approvals" -> "Approval"
+    "Inventory" -> "Inventory"; "Workforce" -> "Workforce"; "Approvals" -> "Approval"; "Payroll" -> "Payroll"
     else -> ""
 }
 @Composable
@@ -286,7 +294,7 @@ private fun Quick(label: String, icon: androidx.compose.ui.graphics.vector.Image
 private fun MoreModules(open: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         item { Text("Modules", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Slate) }
-        items(listOf("Enquiries","Projects","Production","Inventory","Workforce","Approvals")) { name ->
+        items(listOf("Enquiries","Projects","Production","Inventory","Workforce","Payroll","Approvals")) { name ->
             Card(Modifier.fillMaxWidth().clickable { open(name) }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(12.dp)) {
                 Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Text(name, fontWeight = FontWeight.SemiBold, color = Slate); Text(moduleDescription(name), fontSize = 10.sp, color = Slate.copy(.58f)) }
@@ -299,7 +307,7 @@ private fun MoreModules(open: (String) -> Unit) {
 private fun moduleDescription(name: String) = when(name) {
     "Enquiries" -> "Customers and follow-ups"; "Projects" -> "Orders and measurements"
     "Production" -> "Jobs and workshop stages"; "Inventory" -> "Materials and stock"
-    "Workforce" -> "People, attendance and tasks"; else -> "Quotation and purchase decisions"
+    "Workforce" -> "People, attendance and tasks"; "Payroll" -> "Salary runs, advances and payments"; else -> "Quotation and purchase decisions"
 }
 
 @Composable
@@ -345,6 +353,7 @@ private fun pickerDate(millis: Long): String {
     return formatter.format(Date(millis))
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WorkforcePersonPage(
     person: WorkRecord,
@@ -412,8 +421,8 @@ private fun WorkforcePersonPage(
                         Spacer(Modifier.width(8.dp))
                         Text(chosenDate)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        listOf("Present", "Absent", "Half day", "Leave").forEach { value ->
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        listOf("Present", "Absent", "Half day", "Paid leave", "Unpaid leave", "Holiday", "Weekly off", "Leave").forEach { value ->
                             FilterChip(selected = chosenStatus == value, onClick = { chosenStatus = value }, label = { Text(value, fontSize = 10.sp) })
                         }
                     }
