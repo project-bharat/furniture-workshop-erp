@@ -127,7 +127,7 @@ export default function HomePage(){
    <a className="brand" href="#"><span className="brand-mark">A</span><span><strong>AAKRUTI</strong><small>FURNITURE WORKSHOP ERP</small></span></a>
    <div className="workspace-label">WORKSPACE</div>
    <nav className="nav-list" aria-label="Main navigation">
-    {([["Overview",LayoutDashboard],["Workforce",Users],["Attendance",CalendarDays],["Payroll",Wallet]] as const).map(([name,Icon])=><button key={name} className={"nav-item "+(tab===name?"active":"")} onClick={()=>setTab(name)}><Icon size={16}/>{name}</button>)}
+    {([["Overview",LayoutDashboard],["Workforce",Users],["Attendance",CalendarDays],["Payroll",Wallet]] as const).filter(([name])=>name==="Overview"||(name==="Workforce"&&can("workforce.view"))||(name==="Attendance"&&can("attendance.view"))||(name==="Payroll"&&can("payroll.view"))).map(([name,Icon])=><button key={name} className={"nav-item "+(tab===name?"active":"")} onClick={()=>setTab(name)}><Icon size={16}/>{name}</button>)}
    </nav>
    <div className="sidebar-bottom"><span className="connection-dot"/><span>Secure API connection</span></div>
   </aside>
