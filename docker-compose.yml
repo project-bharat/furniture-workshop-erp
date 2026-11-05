@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: furniture_erp
+      POSTGRES_USER: furniture_erp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+    volumes:
+      - furniture_erp_data:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U furniture_erp -d furniture_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DATABASE_URL: jdbc:postgresql://db:5432/furniture_erp
+      DATABASE_USER: furniture_erp
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+      JWT_SECRET: ${JWT_SECRET:?Set a random JWT_SECRET of at least 32 bytes}
+      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:?Set a one-time BOOTSTRAP_SECRET}
+      JWT_ISSUER: furniture-workshop-erp
+      JWT_AUDIENCE: furniture-workshop-clients
+    ports:
+      - "8080:8080"
+
+volumes:
+  furniture_erp_data:
