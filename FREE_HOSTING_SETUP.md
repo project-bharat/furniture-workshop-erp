@@ -72,6 +72,8 @@ If the API service name is changed, update the admin service's WORKSHOP_API_URL 
 
 ## Development notes
 
+The GitHub Actions pipeline also checks the combined Neon bootstrap SQL against a clean PostgreSQL database and parses the Render Blueprint YAML, in addition to the existing application build and migration checks.
+
 - API container build context is `backend/`; Dockerfile is `backend/server/Dockerfile`.
 - Admin app uses Next.js server routes for HttpOnly cookie authentication and same-origin API proxying. Do not convert it to a static export without replacing those server routes.
 - Database migrations in `database/migrations/` are immutable and must be applied in order. The combined Neon setup file is for a brand-new database only. Future migrations must be applied individually once, before deploying code that requires them.
