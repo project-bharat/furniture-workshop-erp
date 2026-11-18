@@ -68,6 +68,17 @@ jobs:
             psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
 
+      - name: Verify Neon bootstrap SQL on a clean database
+        env:
+          PGPASSWORD: ci-only-password
+        run: |
+          set -euo pipefail
+          createdb -h localhost -U postgres furniture_erp_neon_test
+          psql -h localhost -U postgres -d furniture_erp_neon_test -v ON_ERROR_STOP=1 -f database/neon-initial-setup.sql
+
+      - name: Validate Render Blueprint YAML syntax
+        run: ruby -e "require 'yaml'; YAML.load_file('render.yaml')"
+
   android-debug-apk:
     runs-on: ubuntu-latest
     steps:

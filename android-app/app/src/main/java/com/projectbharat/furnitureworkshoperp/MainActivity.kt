@@ -46,17 +46,29 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = android.graphics.Color.rgb(255, 255, 255)
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        val session = SecureSession(this)
+        val database = WorkshopDatabase.getInstance(this)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(
                 primary = Coral, onPrimary = Color.White, secondary = Slate,
                 background = Ivory, surface = Color.White, onSurface = Slate
-            )) { WorkshopApp(WorkshopDatabase.getInstance(this)) }
+            )) {
+                var signedIn by remember { mutableStateOf(session.user()) }
+                if (signedIn == null) {
+                    AuthScreen(this@MainActivity, session) { signedIn = it }
+                } else {
+                    WorkshopApp(database) {
+                        session.clear()
+                        signedIn = null
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun WorkshopApp(database: WorkshopDatabase) {
+private fun WorkshopApp(database: WorkshopDatabase, onLogout: () -> Unit) {
     var page by remember { mutableStateOf("Overview") }
     var query by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
@@ -107,6 +119,9 @@ private fun WorkshopApp(database: WorkshopDatabase) {
                         BadgedBox(badge = { if (records.count { it.kind == "Approval" && it.status == "Awaiting approval" } > 0) Badge { Text(records.count { it.kind == "Approval" && it.status == "Awaiting approval" }.toString()) } }) {
                             Icon(Icons.Default.NotificationsNone, "Approvals", tint = Slate)
                         }
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.Logout, "Sign out", tint = Slate)
                     }
                 }
                 if (searchOpen) OutlinedTextField(
