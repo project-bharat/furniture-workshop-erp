@@ -56,10 +56,11 @@ fun AuthScreen(context: android.content.Context, session: SecureSession, onSigne
                 color = Color(0xFF777784)
             )
             Spacer(Modifier.height(20.dp))
-            OutlinedTextField(base, { base = it.trim(); error = "" }, Modifier.fillMaxWidth(),
-                label = { Text("API server URL") }, placeholder = { Text("https://your-workshop-api") },
-                singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
+
             if (setupMode) {
+                OutlinedTextField(base, { base = it.trim(); error = "" }, Modifier.fillMaxWidth(),
+                    label = { Text("API server URL") }, placeholder = { Text("https://your-workshop-api") },
+                    singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
                 Spacer(Modifier.height(9.dp))
                 OutlinedTextField(bootstrapSecret, { bootstrapSecret = it; error = "" },
                     Modifier.fillMaxWidth(), label = { Text("One-time setup secret") },
@@ -92,6 +93,9 @@ fun AuthScreen(context: android.content.Context, session: SecureSession, onSigne
                 Text("This is a one-time, server-authorized operation. The setup secret is not saved on this device. Only use this screen with a trusted HTTPS API.",
                     style = MaterialTheme.typography.bodySmall, color = Color(0xFF777784))
             } else {
+                OutlinedTextField(base, { base = it.trim(); error = "" }, Modifier.fillMaxWidth(),
+                    label = { Text("API server URL") }, placeholder = { Text("https://your-workshop-api") },
+                    singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
                 Spacer(Modifier.height(9.dp))
                 OutlinedTextField(email, { email = it; error = "" }, Modifier.fillMaxWidth(),
                     label = { Text("Email") }, singleLine = true,
@@ -152,6 +156,23 @@ fun AuthScreen(context: android.content.Context, session: SecureSession, onSigne
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp)
             ) { Text(when { busy && setupMode -> "Creating owner account…"; busy -> "Signing in…"; setupMode -> "Create workshop & owner"; else -> "Sign in" }) }
+
+            if (!setupMode) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        error = ""
+                        val demoUser = session.signInDemo()
+                        onSignedIn(demoUser)
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) { Text("Continue with Demo") }
+                Text("Local demo access • No internet or server required",
+                    style = MaterialTheme.typography.bodySmall, color = Color(0xFF777784))
+            }
+
             TextButton(
                 enabled = !busy,
                 onClick = {
@@ -166,7 +187,7 @@ fun AuthScreen(context: android.content.Context, session: SecureSession, onSigne
                     color = Color(0xFF525266))
             }
             Spacer(Modifier.height(4.dp))
-            Text("Your password is used only for authentication. Session tokens are stored encrypted on this device.",
+            Text("Your password is used only for authentication. Demo mode uses local sample data and does not connect to a server.",
                 style = MaterialTheme.typography.bodySmall, color = Color(0xFF777784))
         }
     }
