@@ -34,8 +34,38 @@ class SecureSession(context: Context) {
             .putLong("expires", tokens.expiresIn).putString("user_id", user.id)
             .putString("user_name", user.name).putString("user_email", user.email)
             .putString("org_id", user.organizationId).putString("org_name", user.organizationName)
-            .putString("role", user.role).putString("permissions", user.permissions.joinToString(",")).apply()
+            .putString("role", user.role).putString("permissions", user.permissions.joinToString(","))
+            .putBoolean("is_demo", false).apply()
     }
+
+    /** Local-only demo identity. No API request, server, database or credentials are used. */
+    fun signInDemo(): SignedInUser {
+        val user = SignedInUser(
+            id = "demo-owner-local",
+            name = "Bharat Rasve",
+            email = "demo@aakrutiworkshop.local",
+            organizationId = "aakruti-demo-local",
+            organizationName = "AAKRUTI WORKSHOP",
+            role = "OWNER_ADMIN",
+            permissions = setOf("workshop.demo", "workshop.read", "workshop.write")
+        )
+        prefs.edit()
+            .putString("access", "LOCAL_DEMO_SESSION")
+            .putString("refresh", "LOCAL_DEMO_SESSION")
+            .putLong("expires", Long.MAX_VALUE)
+            .putString("user_id", user.id)
+            .putString("user_name", user.name)
+            .putString("user_email", user.email)
+            .putString("org_id", user.organizationId)
+            .putString("org_name", user.organizationName)
+            .putString("role", user.role)
+            .putString("permissions", user.permissions.joinToString(","))
+            .putBoolean("is_demo", true)
+            .apply()
+        return user
+    }
+
+    fun isDemo() = prefs.getBoolean("is_demo", false)
     fun accessToken() = prefs.getString("access", null)
     fun refreshToken() = prefs.getString("refresh", null)
     fun user(): SignedInUser? {
@@ -84,19 +114,10 @@ class WorkshopApi(private val baseUrl: String, private val session: SecureSessio
             user
         }
 
-
     suspend fun bootstrap(
-        base: String,
-        bootstrapSecret: String,
-        organizationName: String,
-        legalName: String,
-        branchName: String,
-        ownerName: String,
-        email: String,
-        phone: String,
-        password: String,
-        device: String,
-        store: SecureSession
+        base: String, bootstrapSecret: String, organizationName: String, legalName: String,
+        branchName: String, ownerName: String, email: String, phone: String, password: String,
+        device: String, store: SecureSession
     ): SignedInUser = withContext(Dispatchers.IO) {
         val response = WorkshopApi(base, store).call("/auth/bootstrap", "POST",
             JSONObject()
@@ -125,6 +146,7 @@ class WorkshopApi(private val baseUrl: String, private val session: SecureSessio
 
     suspend fun authenticated(path: String, method: String = "GET", body: JSONObject? = null): JSONObject =
         withContext(Dispatchers.IO) {
+            if (session.isDemo()) throw ApiException(403, "This is a local demo session. Server sync is disabled.")
             val access = session.accessToken() ?: throw ApiException(401, "Sign in required")
             try { call(path, method, body, access) }
             catch (e: ApiException) {
@@ -133,7 +155,6 @@ class WorkshopApi(private val baseUrl: String, private val session: SecureSessio
                 try {
                     val pair = call("/auth/refresh", "POST", JSONObject().put("refreshToken", refresh))
                     val userJson = pair.getJSONObject("user")
-                    val old = session.user()
                     val arr = userJson.optJSONArray("permissions")
                     val user = SignedInUser(userJson.getString("id"), userJson.getString("name"),
                         userJson.optString("email").takeIf { it != "null" }, userJson.getString("organizationId"),
@@ -147,6 +168,7 @@ class WorkshopApi(private val baseUrl: String, private val session: SecureSessio
         }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
+        if (session.isDemo()) { session.clear(); return@withContext }
         val refresh = session.refreshToken()
         if (refresh != null) runCatching { call("/auth/logout", "POST", JSONObject().put("refreshToken", refresh)) }
         session.clear()
